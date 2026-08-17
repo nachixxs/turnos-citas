@@ -1,0 +1,105 @@
+"""Agente Claude: decide qué tool llamar en cada mensaje (SPECS §3).
+
+Dos capas separadas a propósito, igual que en CP1:
+
+- **Decisión** — habla con la Claude API y devuelve qué tool eligió el modelo
+  y con qué argumentos. Necesita API key y red.
+- **Ejecución** — función pura que aplica esa decisión contra el motor de
+  disponibilidad. Se testea sin credenciales ni red.
+
+El prompt de sistema se arma en cada request con la fecha real del momento:
+cachearlo haría que el bot resuelva "mañana" contra una fecha vieja.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+
+from app.config_loader import ConfigNegocio, RangoHorario
+
+# `datetime.strftime('%A')` depende del locale del sistema y en Windows suele
+# devolver inglés. Se mapea a mano para que el prompt sea siempre en español.
+DIAS_SEMANA: list[str] = [
+    "lunes",
+    "martes",
+    "miércoles",
+    "jueves",
+    "viernes",
+    "sábado",
+    "domingo",
+]
+
+
+def _formato_precio(precio: int) -> str:
+    """32000 -> '$32.000' (separador de miles argentino)."""
+    return f"${precio:,}".replace(",", ".")
+
+
+def _formato_rango(rango: RangoHorario) -> str:
+    return f"{rango.inicio:%H:%M} a {rango.fin:%H:%M}"
+
+
+def _fecha_en_palabras(momento: datetime) -> str:
+    """'miércoles 19 de agosto de 2026' — legible para el modelo y para un humano."""
+    meses = [
+        "enero", "febrero", "marzo", "abril", "mayo", "junio",
+        "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+    ]
+    dia_semana = DIAS_SEMANA[momento.weekday()]
+    return (
+        f"{dia_semana} {momento.day} de {meses[momento.month - 1]} "
+        f"de {momento.year}"
+    )
+
+
+def _catalogo_de_servicios(config: ConfigNegocio) -> str:
+    """Una línea por servicio, con el id exacto que espera la tool."""
+    return "\n".join(
+        f"- id `{s.id}`: {s.nombre}, {_formato_precio(s.precio)}"
+        for s in config.servicios
+    )
+
+
+def construir_prompt_sistema(
+    config: ConfigNegocio,
+    nombre_perfil: str,
+    ahora: datetime | None = None,
+) -> str:
+    """Prompt de sistema del agente, con la fecha real del momento.
+
+    `ahora` se inyecta para poder testear con un reloj fijo; si no se pasa, se
+    usa la hora actual del sistema. Nunca se cachea el resultado: un prompt con
+    la fecha de ayer hace que el bot resuelva mal "mañana" o "el viernes".
+    """
+    momento = ahora if ahora is not None else datetime.now()
+    negocio = config.negocio
+
+    horarios = " y ".join(
+        _formato_rango(r) for r in config.horario_atencion.lunes_a_viernes
+    )
+    obra_social = (
+        "Trabaja con obras sociales."
+        if negocio.atiende_obra_social
+        else "Atiende solo de forma particular, no trabaja con obras sociales."
+    )
+
+    return f"""Sos el asistente de WhatsApp de {negocio.nombre}. Atendés a pacientes que escriben para sacar un turno o hacer consultas.
+
+Hoy es {_fecha_en_palabras(momento)} ({momento:%Y-%m-%d}). Resolvé contra esta fecha cualquier expresión relativa ("mañana", "el viernes", "la semana que viene"). Nunca asumas otra fecha ni inventes el año.
+
+DATOS DEL CONSULTORIO
+- Dirección: {negocio.direccion}
+- Atención: lunes a viernes, {horarios}
+- Obra social: {obra_social}
+- Teléfono de contacto: {negocio.telefono_contacto}
+
+SERVICIOS
+{_catalogo_de_servicios(config)}
+
+Todos los turnos ocupan un bloque fijo de {config.duracion_slot_minutos} minutos, sin importar el servicio.
+
+QUIÉN ESCRIBE
+El nombre de perfil de WhatsApp de quien escribe es "{nombre_perfil}".
+
+CÓMO RESPONDER
+Escribí en español rioplatense, breve y cordial, como un mensaje de WhatsApp. Sin encabezados, sin listas largas, sin markdown."""
