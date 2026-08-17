@@ -13,7 +13,9 @@ cachearlo haría que el bot resuelva "mañana" contra una fecha vieja.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime, time
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.config_loader import ConfigNegocio, RangoHorario
 
@@ -103,3 +105,74 @@ El nombre de perfil de WhatsApp de quien escribe es "{nombre_perfil}".
 
 CÓMO RESPONDER
 Escribí en español rioplatense, breve y cordial, como un mensaje de WhatsApp. Sin encabezados, sin listas largas, sin markdown."""
+
+
+# ── Tool: crear_turno (SPECS §6) ──────────────────────────────────────────
+
+
+class ArgumentosCrearTurno(BaseModel):
+    """Argumentos que el modelo extrae del mensaje para `crear_turno`.
+
+    Que sea un modelo Pydantic y no un dict suelto es lo que convierte un
+    argumento mal formado ("hora": "a la mañana") en un error explícito en vez
+    de un `KeyError` tres capas más abajo.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    fecha: date
+    hora: time
+    servicio: str = Field(min_length=1)
+    nombre_paciente: str = Field(min_length=1)
+
+
+def tool_crear_turno(config: ConfigNegocio) -> dict:
+    """Definición de la tool `crear_turno`, con el catálogo real del negocio.
+
+    El `enum` de servicios sale del JSON de configuración: si mañana el cliente
+    agrega un servicio, la tool lo refleja sin tocar el código.
+    """
+    return {
+        "name": "crear_turno",
+        "description": (
+            "Reserva un turno nuevo. Llamala solo cuando tengas los cuatro "
+            "datos: fecha, hora, servicio y nombre del paciente. Si falta "
+            "alguno, preguntá por el que falta en vez de llamar a la tool."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "fecha": {
+                    "type": "string",
+                    "description": (
+                        "Fecha del turno en formato YYYY-MM-DD, resuelta contra "
+                        "la fecha de hoy que figura en el prompt."
+                    ),
+                },
+                "hora": {
+                    "type": "string",
+                    "description": (
+                        "Hora de inicio en formato HH:MM de 24 horas, por "
+                        "ejemplo 09:30 o 16:00."
+                    ),
+                },
+                "servicio": {
+                    "type": "string",
+                    "enum": [s.id for s in config.servicios],
+                    "description": "Id del servicio del catálogo.",
+                },
+                "nombre_paciente": {
+                    "type": "string",
+                    "description": (
+                        "Nombre de la persona que se va a atender. Por defecto "
+                        "el nombre de perfil de WhatsApp de quien escribe; si "
+                        "el mensaje indica que el turno es para otra persona "
+                        "(por ejemplo 'para mi hijo Tomás'), usá ese nombre."
+                    ),
+                },
+            },
+            "required": ["fecha", "hora", "servicio", "nombre_paciente"],
+            "additionalProperties": False,
+        },
+        "strict": True,
+    }
