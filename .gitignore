@@ -1,0 +1,39 @@
+# ─────────────────────────────────────────────────────────────
+# Secretos — nunca al repo
+# ─────────────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# Credenciales de Google (service account). El archivo real vive fuera
+# del repo, en %USERPROFILE%\.gcp\ — estas reglas son la red de seguridad
+# por si alguna vez alguien lo copia acá adentro por error.
+*.json.key
+credentials/
+service-account*.json
+*-sa.json
+client_secret*.json
+
+*.key
+*.pem
+
+# ─────────────────────────────────────────────────────────────
+# Python
+# ─────────────────────────────────────────────────────────────
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# ─────────────────────────────────────────────────────────────
+# Editores y sistema operativo
+# ─────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+.DS_Store

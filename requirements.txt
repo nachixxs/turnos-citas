@@ -1,0 +1,10 @@
+# Dependencias de CP1 (setup + motor de datos).
+# FastAPI (CP3) y el SDK de Claude (CP2) se suman en su checkpoint,
+# no antes — ver ROADMAP.md.
+
+pydantic==2.13.4          # validacion de config y modelos de dominio
+gspread==6.2.1            # cliente de Google Sheets
+google-auth==2.56.3       # credenciales de service account
+python-dotenv==1.2.3      # carga de .env
+
+pytest==9.1.1             # testing
