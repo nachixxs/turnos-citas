@@ -129,6 +129,10 @@ QUÉ HACER CON CADA MENSAJE
 
 {mensaje_cancelacion(config)}
 
+4. Si quiere un turno pero falta algún dato (no dijo qué servicio, o no dijo fecha u hora), NO llames a ninguna tool: preguntá por el dato que falta y esperá la respuesta. Nunca inventes un servicio, una fecha ni un horario que el paciente no dijo.
+
+Si no dice para quién es el turno, es para quien escribe. Si dice que es para otra persona, usá el nombre de esa persona: eso no es un dato faltante y no hace falta repreguntarlo.
+
 CÓMO RESPONDER
 Escribí en español rioplatense, breve y cordial, como un mensaje de WhatsApp. Sin encabezados, sin listas largas, sin markdown."""
 
