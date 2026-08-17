@@ -16,11 +16,13 @@ from __future__ import annotations
 import logging
 import os
 from datetime import date, datetime, time
-from typing import Any, Iterable, Literal
+from typing import Any, Iterable, Literal, Sequence
 
 import anthropic
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from app.availability import Turno, esta_disponible
+from app.availability import alternativas as calcular_alternativas
 from app.config_loader import ConfigNegocio, RangoHorario
 
 logger = logging.getLogger(__name__)
@@ -372,3 +374,92 @@ def decidir(
     decision = extraer_decision(respuesta.content)
     logger.info("tool elegida: %s %s", decision.tool or "ninguna", decision.argumentos)
     return decision
+
+
+# ── Ejecución: aplicar la decisión contra el motor de CP1 ─────────────────
+
+EstadoResultado = Literal[
+    "sin_tool",             # cancelación o repregunta: responde el texto del modelo
+    "consulta_general",     # FAQ, con el tema extraído
+    "turno_confirmado",     # slot libre: queda un Turno listo para persistir
+    "slot_no_disponible",   # ocupado o fuera de grilla: hay alternativas
+    "servicio_invalido",    # el id no está en el catálogo del negocio
+    "argumentos_invalidos",  # el modelo mandó algo que no parsea
+    "tool_desconocida",     # defensivo: una tool que no definimos
+]
+
+
+class ResultadoAgente(BaseModel):
+    """Qué hay que hacer después de aplicar la decisión del modelo.
+
+    No persiste nada: devuelve el `Turno` listo y deja el guardado en la Sheet
+    para quien la llame (CP3). Eso es lo que la mantiene pura y testeable sin
+    red, igual que `availability.py`.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    estado: EstadoResultado
+    turno: Turno | None = None
+    alternativas: list[time] = Field(default_factory=list)
+    tema: TemaFAQ | None = None
+    detalle: str = ""
+
+
+def aplicar_decision(
+    decision: DecisionAgente,
+    telefono: str,
+    turnos: Sequence[Turno],
+    config: ConfigNegocio,
+    ahora: datetime | None = None,
+) -> ResultadoAgente:
+    """Aplica la decisión del modelo usando el motor de disponibilidad de CP1.
+
+    Función pura: no habla con la API ni con Google Sheets. `telefono` llega
+    resuelto del payload del webhook, nunca de la extracción de la IA (SPECS §6).
+    """
+    if decision.tool is None:
+        return ResultadoAgente(estado="sin_tool")
+
+    if decision.tool == "consulta_general":
+        try:
+            args_faq = ArgumentosConsultaGeneral.model_validate(decision.argumentos)
+        except ValidationError as error:
+            return ResultadoAgente(estado="argumentos_invalidos", detalle=str(error))
+        return ResultadoAgente(estado="consulta_general", tema=args_faq.tema)
+
+    if decision.tool != "crear_turno":
+        return ResultadoAgente(
+            estado="tool_desconocida", detalle=f"tool no definida: {decision.tool!r}"
+        )
+
+    try:
+        args = ArgumentosCrearTurno.model_validate(decision.argumentos)
+    except ValidationError as error:
+        return ResultadoAgente(estado="argumentos_invalidos", detalle=str(error))
+
+    if config.servicio_por_id(args.servicio) is None:
+        return ResultadoAgente(
+            estado="servicio_invalido", detalle=f"servicio inexistente: {args.servicio!r}"
+        )
+
+    if not esta_disponible(args.fecha, args.hora, turnos, config, ahora=ahora):
+        # SPECS §8: nunca rechazar sin ofrecer opciones, nunca redondear solo.
+        return ResultadoAgente(
+            estado="slot_no_disponible",
+            alternativas=calcular_alternativas(
+                args.fecha, args.hora, turnos, config, ahora=ahora
+            ),
+            detalle=f"{args.fecha} {args.hora:%H:%M} no está disponible",
+        )
+
+    return ResultadoAgente(
+        estado="turno_confirmado",
+        turno=Turno(
+            fecha=args.fecha,
+            hora=args.hora,
+            servicio_id=args.servicio,
+            nombre_paciente=args.nombre_paciente,
+            telefono=telefono,
+        ),
+    )
