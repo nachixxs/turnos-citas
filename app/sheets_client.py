@@ -64,7 +64,7 @@ class SheetsClient:
         """
         faltantes = [
             nombre
-            for nombre in ("SHEET_ID", "GOOGLE_APPLICATION_CREDENTIALS")
+            for nombre in ("SPREADSHEET_ID", "GOOGLE_SHEETS_CREDENTIALS_PATH")
             if not os.getenv(nombre)
         ]
         if faltantes:
@@ -74,8 +74,8 @@ class SheetsClient:
             )
 
         return cls(
-            sheet_id=os.environ["SHEET_ID"],
-            credentials_path=os.environ["GOOGLE_APPLICATION_CREDENTIALS"],
+            sheet_id=os.environ["SPREADSHEET_ID"],
+            credentials_path=os.environ["GOOGLE_SHEETS_CREDENTIALS_PATH"],
             worksheet=os.getenv("SHEET_WORKSHEET", "Turnos"),
         )
 
