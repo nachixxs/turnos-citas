@@ -13,12 +13,29 @@ cachearlo haría que el bot resuelva "mañana" contra una fecha vieja.
 
 from __future__ import annotations
 
+import logging
+import os
 from datetime import date, datetime, time
-from typing import Literal
+from typing import Any, Iterable, Literal
 
+import anthropic
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.config_loader import ConfigNegocio, RangoHorario
+
+logger = logging.getLogger(__name__)
+
+MODELO = "claude-opus-5"
+
+# Tope duro de la respuesta (thinking + texto). Generoso a propósito: no es un
+# objetivo, es un techo para que una respuesta no se corte por la mitad.
+MAX_TOKENS = 16000
+
+# El ruteo entre 4 caminos no necesita razonamiento profundo. Thinking queda
+# ENCENDIDO igual (es el default en Opus 5): apagado, el modelo a veces emite la
+# llamada a la tool como texto plano en vez de un bloque tool_use, el turno
+# termina sin error y el turno nunca se crea.
+EFFORT = "low"
 
 # `datetime.strftime('%A')` depende del locale del sistema y en Windows suele
 # devolver inglés. Se mapea a mano para que el prompt sea siempre en español.
@@ -264,3 +281,94 @@ def definir_tools(config: ConfigNegocio) -> list[dict]:
     de orden entre requests invalida el prefijo cacheado.
     """
     return [tool_crear_turno(config), tool_consulta_general(config)]
+
+
+# ── Decisión: qué tool eligió el modelo ───────────────────────────────────
+
+
+class DecisionAgente(BaseModel):
+    """Qué decidió el modelo para un mensaje: la tool, sus argumentos, el texto.
+
+    `tool` en None es una decisión válida y frecuente, no un error: son los
+    caminos de cancelación y de repregunta (SPECS §3).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    tool: str | None = None
+    argumentos: dict[str, Any] = Field(default_factory=dict)
+    texto: str = ""
+
+    @property
+    def llamo_a_una_tool(self) -> bool:
+        return self.tool is not None
+
+
+def extraer_decision(bloques: Iterable[Any]) -> DecisionAgente:
+    """Convierte los bloques de contenido de la respuesta en una `DecisionAgente`.
+
+    Función pura y sin dependencias del SDK: recibe cualquier cosa con `.type`,
+    así se puede testear el parseo sin red ni API key. Los bloques `thinking`
+    se ignoran; nunca traen contenido en Opus 5.
+    """
+    tool: str | None = None
+    argumentos: dict[str, Any] = {}
+    partes: list[str] = []
+
+    for bloque in bloques:
+        tipo = getattr(bloque, "type", None)
+        if tipo == "text":
+            partes.append(bloque.text)
+        elif tipo == "tool_use" and tool is None:
+            # Solo la primera: la request desactiva el uso de tools en paralelo,
+            # así que "qué tool se llamó" no es ambiguo.
+            tool = bloque.name
+            argumentos = dict(bloque.input)
+
+    return DecisionAgente(tool=tool, argumentos=argumentos, texto="".join(partes).strip())
+
+
+def cliente_anthropic() -> anthropic.Anthropic:
+    """Construye el cliente leyendo `ANTHROPIC_API_KEY` del entorno.
+
+    Falla ruidoso si falta, igual que `SheetsClient.desde_entorno`: es mejor
+    que descubrirlo a mitad de una conversación real.
+    """
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        raise RuntimeError(
+            "falta la variable de entorno ANTHROPIC_API_KEY. "
+            "Copiá .env.example a .env y completala."
+        )
+    return anthropic.Anthropic()
+
+
+def decidir(
+    mensaje: str,
+    config: ConfigNegocio,
+    nombre_perfil: str,
+    cliente: anthropic.Anthropic | None = None,
+    ahora: datetime | None = None,
+) -> DecisionAgente:
+    """Una sola llamada a la API por mensaje: el modelo elige tool o ninguna.
+
+    No hay loop agéntico ni ejecución de tools acá — eso lo hace
+    `aplicar_decision`, que es puro. Esta función es la única que toca la red.
+    """
+    api = cliente if cliente is not None else cliente_anthropic()
+    logger.info("mensaje recibido de '%s' (%d caracteres)", nombre_perfil, len(mensaje))
+
+    respuesta = api.messages.create(
+        model=MODELO,
+        max_tokens=MAX_TOKENS,
+        thinking={"type": "adaptive"},
+        output_config={"effort": EFFORT},
+        system=construir_prompt_sistema(config, nombre_perfil, ahora=ahora),
+        tools=definir_tools(config),
+        # Un mensaje, una decisión: sin tools en paralelo el ruteo es unívoco.
+        tool_choice={"type": "auto", "disable_parallel_tool_use": True},
+        messages=[{"role": "user", "content": mensaje}],
+    )
+
+    decision = extraer_decision(respuesta.content)
+    logger.info("tool elegida: %s %s", decision.tool or "ninguna", decision.argumentos)
+    return decision
