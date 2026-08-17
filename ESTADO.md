@@ -8,11 +8,12 @@ MVP de agendamiento de turnos por WhatsApp con IA, primera de las 4 automatizaci
 
 ## Estado actual
 
-**Fase:** planificación cerrada — `SPECS.md` y `ROADMAP.md` listos, código todavía sin empezar (CP1 pendiente).
+**Fase:** CP1 cerrado — el motor de reservas funciona de forma aislada y la
+conexión con Google Sheets está verificada de punta a punta. Próximo: CP2.
 
 | CP | Nombre | Estado |
 |---|---|---|
-| CP1 | Setup + motor de datos | Pendiente |
+| CP1 | Setup + motor de datos | **Hecho** |
 | CP2 | Agente Claude (tool use) y ruteo de 4 caminos | Pendiente |
 | CP3 | Endpoint FastAPI + parseo del webhook | Pendiente |
 | CP4 | Orquestación n8n + prueba end-to-end | Pendiente |
@@ -29,30 +30,37 @@ Detalle de cada checkpoint (tareas, DoD, testing): ver `ROADMAP.md`.
 - **Persistencia:** Google Sheets (turnos confirmados)
 - **Configuración por negocio:** archivo JSON (`config/negocio.json`), nunca hardcodeado en el código
 
-## Estructura de repo propuesta
+## Estructura del repo
+
+Lo marcado con `(CPn)` todavía no existe: entra en ese checkpoint.
 
 ```
 turnos-citas/
 ├── app/
-│   ├── main.py               # FastAPI app, endpoint del webhook
-│   ├── agent.py              # Agente Claude, prompt de sistema, tools
-│   ├── availability.py       # Motor de grilla de slots (CP1)
+│   ├── config_loader.py      # Carga y validación del JSON de config
+│   ├── availability.py       # Motor de grilla de slots
 │   ├── sheets_client.py      # Cliente Google Sheets
-│   └── config_loader.py      # Carga y validación del JSON de config
+│   ├── agent.py              # (CP2) Agente Claude, prompt de sistema, tools
+│   └── main.py               # (CP3) FastAPI app, endpoint del webhook
 ├── config/
 │   └── negocio.json          # Configuración del negocio ficticio (SPECS §5)
+├── scripts/
+│   └── verificar_sheets.py   # Verificación manual contra la Sheet real
 ├── tests/
-│   ├── fixtures/             # Payloads de ejemplo, turnos precargados
+│   ├── conftest.py           # Fixtures y fechas ancla
+│   ├── test_config_loader.py
 │   ├── test_availability.py
-│   ├── test_agent_routing.py
-│   └── test_webhook.py
+│   ├── test_sheets_client.py
+│   ├── test_agent_routing.py # (CP2)
+│   └── test_webhook.py       # (CP3)
 ├── n8n/
-│   └── flow.json             # Export del flujo de n8n (CP4)
+│   └── flow.json             # (CP4) Export del flujo de n8n
 ├── .env.example
 ├── .gitignore
+├── pytest.ini
 ├── requirements.txt
 ├── ESTADO.md                 # este archivo
-├── README.md                 # README público de portfolio (se genera en CP6)
+├── README.md                 # (CP6) README público de portfolio
 ├── SPECS.md
 ├── ROADMAP.md
 └── CODESTYLE.md
@@ -66,11 +74,40 @@ Consultorio Odontológico Dr. Franco Aguilar — un solo profesional, atención 
 
 ## Cómo correr el proyecto
 
-Pendiente de documentar — se completa al cerrar CP1 (setup) con los pasos reales verificados, no antes.
+Pasos verificados en Windows 11 con PowerShell y Python 3.14.
+
+```powershell
+# 1. Entorno virtual e instalación
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+
+# 2. Configuración local (una sola vez)
+Copy-Item .env.example .env
+# completar GOOGLE_SHEETS_CREDENTIALS_PATH y SPREADSHEET_ID en .env
+
+# 3. Tests — no necesitan credenciales ni red
+python -m pytest
+
+# 4. Verificación real contra Google Sheets
+python scripts/verificar_sheets.py             # solo lectura
+python scripts/verificar_sheets.py --escribir  # además escribe y relee
+```
+
+La Sheet tiene que tener esta fila 1 exacta, y la columna `hora` formateada
+como texto:
+
+```
+fecha | hora | servicio_id | nombre_paciente | telefono | creado_en
+```
+
+Además, hay que compartirla con el email de la service account con permiso de
+Editor: sin eso, la API devuelve 403 aunque las credenciales sean válidas.
 
 ## Próximo paso
 
-Arrancar CP1: setup del repo y motor de datos. Ver `ROADMAP.md`.
+Arrancar CP2: agente Claude con tool use y ruteo de los 4 caminos. Ver
+`ROADMAP.md`.
 
 ## Documentos relacionados
 
