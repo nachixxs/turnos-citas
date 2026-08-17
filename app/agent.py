@@ -14,6 +14,7 @@ cachearlo haría que el bot resuelva "mañana" contra una fecha vieja.
 from __future__ import annotations
 
 from datetime import date, datetime, time
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -176,3 +177,61 @@ def tool_crear_turno(config: ConfigNegocio) -> dict:
         },
         "strict": True,
     }
+
+
+# ── Tool: consulta_general (SPECS §7) ─────────────────────────────────────
+
+# Vocabulario cerrado a propósito: el FAQ del MVP cubre exactamente estos
+# cuatro temas. Que sea un enum y no texto libre permite verificar en los tests
+# qué se preguntó, sin evaluar la redacción de la respuesta.
+TemaFAQ = Literal["horarios", "direccion", "precios", "obra_social"]
+TEMAS_FAQ: tuple[str, ...] = ("horarios", "direccion", "precios", "obra_social")
+
+
+class ArgumentosConsultaGeneral(BaseModel):
+    """Argumentos que el modelo extrae del mensaje para `consulta_general`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    tema: TemaFAQ
+
+
+def tool_consulta_general(config: ConfigNegocio) -> dict:
+    """Definición de la tool `consulta_general` (FAQ).
+
+    Recibe el config por consistencia con `tool_crear_turno` y porque el motor
+    es genérico, aunque el esquema de esta tool no dependa del catálogo.
+    """
+    del config  # el esquema del FAQ es igual para cualquier negocio
+
+    return {
+        "name": "consulta_general",
+        "description": (
+            "Responde una consulta sobre el consultorio. Cubre solo estos "
+            "temas: horarios y días de atención, dirección, precios de los "
+            "servicios, y obra social o formas de pago. No la uses para "
+            "urgencias ni para reservar, cancelar o reprogramar turnos."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "tema": {
+                    "type": "string",
+                    "enum": list(TEMAS_FAQ),
+                    "description": "Tema del FAQ sobre el que pregunta el paciente.",
+                },
+            },
+            "required": ["tema"],
+            "additionalProperties": False,
+        },
+        "strict": True,
+    }
+
+
+def definir_tools(config: ConfigNegocio) -> list[dict]:
+    """Las dos tools del agente, en orden fijo.
+
+    El orden importa para el caché de prompts de la API: una lista que cambia
+    de orden entre requests invalida el prefijo cacheado.
+    """
+    return [tool_crear_turno(config), tool_consulta_general(config)]
