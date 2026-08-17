@@ -12,7 +12,15 @@ Trabajás solo dentro de este repo (`turnos-citas/`). No toques el vault de Obsi
 
 ## Comandos
 
-Pendiente — se completa al cerrar CP1 con los comandos reales (`pytest`, server local, etc.), no antes.
+Siempre con el Python del venv, nunca el global:
+
+```powershell
+.venv\Scripts\python.exe -m pytest              # tests: sin credenciales ni red
+.venv\Scripts\python.exe scripts\verificar_sheets.py   # real, contra Google Sheets
+.venv\Scripts\python.exe scripts\verificar_agente.py   # real, contra la Claude API
+```
+
+Los dos scripts de `scripts/` usan credenciales reales: los corre la persona, no Claude Code, salvo autorización explícita. Setup completo del entorno en `ESTADO.md`.
 
 ## Testing
 

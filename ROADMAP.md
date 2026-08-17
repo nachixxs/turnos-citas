@@ -8,8 +8,8 @@ Referencia de alcance y decisiones de producto: `SPECS.md`. Este documento no re
 
 | CP | Nombre | Depende de | Estado |
 |---|---|---|---|
-| CP1 | Setup + motor de datos | — | Pendiente |
-| CP2 | Agente Claude (tool use) y ruteo de 4 caminos | CP1 | Pendiente |
+| CP1 | Setup + motor de datos | — | **Hecho** |
+| CP2 | Agente Claude (tool use) y ruteo de 4 caminos | CP1 | **Hecho** |
 | CP3 | Endpoint FastAPI + parseo del webhook | CP2 | Pendiente |
 | CP4 | Orquestación n8n + prueba end-to-end | CP3 | Pendiente |
 | CP5 | Testing estructural completo | CP4 | Pendiente |

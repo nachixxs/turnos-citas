@@ -8,13 +8,14 @@ MVP de agendamiento de turnos por WhatsApp con IA, primera de las 4 automatizaci
 
 ## Estado actual
 
-**Fase:** CP1 cerrado — el motor de reservas funciona de forma aislada y la
-conexión con Google Sheets está verificada de punta a punta. Próximo: CP2.
+**Fase:** CP2 cerrado — el agente rutea correctamente los 4 caminos de SPECS §3
+y llama a las tools con los argumentos correctos, verificado contra la Claude
+API real (12/12 casos del guion). Próximo: CP3.
 
 | CP | Nombre | Estado |
 |---|---|---|
 | CP1 | Setup + motor de datos | **Hecho** |
-| CP2 | Agente Claude (tool use) y ruteo de 4 caminos | Pendiente |
+| CP2 | Agente Claude (tool use) y ruteo de 4 caminos | **Hecho** |
 | CP3 | Endpoint FastAPI + parseo del webhook | Pendiente |
 | CP4 | Orquestación n8n + prueba end-to-end | Pendiente |
 | CP5 | Testing estructural completo | Pendiente |
@@ -40,18 +41,19 @@ turnos-citas/
 │   ├── config_loader.py      # Carga y validación del JSON de config
 │   ├── availability.py       # Motor de grilla de slots
 │   ├── sheets_client.py      # Cliente Google Sheets
-│   ├── agent.py              # (CP2) Agente Claude, prompt de sistema, tools
+│   ├── agent.py              # Agente Claude: prompt, tools, decisión y ejecución
 │   └── main.py               # (CP3) FastAPI app, endpoint del webhook
 ├── config/
 │   └── negocio.json          # Configuración del negocio ficticio (SPECS §5)
 ├── scripts/
-│   └── verificar_sheets.py   # Verificación manual contra la Sheet real
+│   ├── verificar_sheets.py   # Verificación manual contra la Sheet real
+│   └── verificar_agente.py   # Guion de verificación contra la Claude API real
 ├── tests/
 │   ├── conftest.py           # Fixtures y fechas ancla
 │   ├── test_config_loader.py
 │   ├── test_availability.py
 │   ├── test_sheets_client.py
-│   ├── test_agent_routing.py # (CP2)
+│   ├── test_agent_routing.py
 │   └── test_webhook.py       # (CP3)
 ├── n8n/
 │   └── flow.json             # (CP4) Export del flujo de n8n
@@ -84,7 +86,8 @@ pip install -r requirements.txt
 
 # 2. Configuración local (una sola vez)
 Copy-Item .env.example .env
-# completar GOOGLE_SHEETS_CREDENTIALS_PATH y SPREADSHEET_ID en .env
+# completar en .env: GOOGLE_SHEETS_CREDENTIALS_PATH, SPREADSHEET_ID
+# y ANTHROPIC_API_KEY
 
 # 3. Tests — no necesitan credenciales ni red
 python -m pytest
@@ -92,6 +95,10 @@ python -m pytest
 # 4. Verificación real contra Google Sheets
 python scripts/verificar_sheets.py             # solo lectura
 python scripts/verificar_sheets.py --escribir  # además escribe y relee
+
+# 5. Verificación real del agente contra la Claude API (12 llamadas)
+python scripts/verificar_agente.py             # el guion completo
+python scripts/verificar_agente.py --caso 3    # un solo caso
 ```
 
 La Sheet tiene que tener esta fila 1 exacta, y la columna `hora` formateada
@@ -106,8 +113,14 @@ Editor: sin eso, la API devuelve 403 aunque las credenciales sean válidas.
 
 ## Próximo paso
 
-Arrancar CP2: agente Claude con tool use y ruteo de los 4 caminos. Ver
-`ROADMAP.md`.
+Arrancar CP3: endpoint FastAPI y parseo del payload del webhook de WhatsApp.
+Ver `ROADMAP.md`.
+
+Dato que sale de la verificación de CP2 y condiciona CP3: cuando el modelo
+llama a una tool **no escribe texto**. El mensaje que se le devuelve al
+paciente hay que componerlo desde el `ResultadoAgente` (turno confirmado,
+alternativas, tema del FAQ), no esperarlo de la respuesta del modelo. Es lo
+correcto: una confirmación de turno tiene que ser determinista.
 
 ## Documentos relacionados
 
