@@ -70,6 +70,9 @@ class Servicio(_Base):
 class Negocio(_Base):
     nombre: str = Field(min_length=1)
     direccion: str = Field(min_length=1)
+    # Contacto directo al que el bot deriva las cancelaciones y
+    # reprogramaciones, que quedan fuera de alcance (SPECS §9).
+    telefono_contacto: str = Field(min_length=1)
     atiende_obra_social: bool
 
 

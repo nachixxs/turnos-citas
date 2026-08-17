@@ -12,7 +12,12 @@ from pydantic import ValidationError
 from app.config_loader import ConfigNegocio, cargar_config
 
 CONFIG_VALIDO: dict = {
-    "negocio": {"nombre": "Test", "direccion": "Calle 1", "atiende_obra_social": False},
+    "negocio": {
+        "nombre": "Test",
+        "direccion": "Calle 1",
+        "telefono_contacto": "+54 9 261 555-0000",
+        "atiende_obra_social": False,
+    },
     "horario_atencion": {"lunes_a_viernes": ["09:00-13:00"]},
     "duracion_slot_minutos": 30,
     "servicios": [
@@ -40,6 +45,7 @@ def test_el_config_del_repo_coincide_con_specs_seccion_4() -> None:
 
     assert config.negocio.nombre == "Consultorio Odontológico Dr. Franco Aguilar"
     assert config.negocio.direccion == "Av. San Martín 850"
+    assert config.negocio.telefono_contacto == "+54 9 261 555-0134"
     assert config.negocio.atiende_obra_social is False
     assert config.duracion_slot_minutos == 30
     assert [s.id for s in config.servicios] == ["control", "limpieza", "extraccion"]

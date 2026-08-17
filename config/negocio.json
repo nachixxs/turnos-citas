@@ -2,6 +2,7 @@
   "negocio": {
     "nombre": "Consultorio Odontológico Dr. Franco Aguilar",
     "direccion": "Av. San Martín 850",
+    "telefono_contacto": "+54 9 261 555-0134",
     "atiende_obra_social": false
   },
   "horario_atencion": {

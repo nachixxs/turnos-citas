@@ -25,6 +25,7 @@ Un cliente escribe al WhatsApp del negocio. Un agente con Claude API (tool use) 
 
 - **Nombre:** Consultorio Odontológico Dr. Franco Aguilar
 - **Dirección:** Av. San Martín 850
+- **Teléfono de contacto:** +54 9 261 555-0134 (ficticio, como todo el resto de los datos)
 - **Horario de atención:** Lunes a viernes 9:00–13:00 y 15:00–19:00
 - **Obra social:** Atiende solo de forma particular (no trabaja con obras sociales) — simplificación deliberada para no meter lógica de cobertura por plan en el FAQ del MVP.
 
@@ -47,6 +48,7 @@ Estructura de referencia (motor genérico, config por cliente):
   "negocio": {
     "nombre": "Consultorio Odontológico Dr. Franco Aguilar",
     "direccion": "Av. San Martín 850",
+    "telefono_contacto": "+54 9 261 555-0134",
     "atiende_obra_social": false
   },
   "horario_atencion": {
@@ -92,7 +94,9 @@ Cubre exclusivamente:
 
 ## 9. Cancelación / reprogramación
 
-No es un flujo resuelto por el bot en este MVP. Si el agente detecta intención de cancelar o reprogramar un turno existente, responde con un mensaje fijo derivando al contacto directo del consultorio — no intenta resolverlo como si fuera una tool de turno nuevo, y no llama a ninguna tool en ese camino.
+No es un flujo resuelto por el bot en este MVP. Si el agente detecta intención de cancelar o reprogramar un turno existente, responde con un mensaje fijo derivando al `telefono_contacto` del negocio (sección 5) — no intenta resolverlo como si fuera una tool de turno nuevo, y no llama a ninguna tool en ese camino.
+
+El teléfono sale del JSON de configuración y no está hardcodeado en el código: es un dato que cambia con cada cliente. El mensaje se verifica de forma estructural comparándolo contra la constante del código, no evaluando si "suena bien".
 
 ## 10. Explícitamente fuera de alcance de este MVP
 
