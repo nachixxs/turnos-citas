@@ -32,6 +32,24 @@ DIAS_SEMANA: list[str] = [
     "domingo",
 ]
 
+# Mensaje fijo del camino de cancelación / reprogramación (SPECS §9). Es una
+# plantilla y no un literal porque el teléfono cambia con cada cliente: el dato
+# sale del JSON de configuración, nunca del código.
+PLANTILLA_CANCELACION = (
+    "Para cancelar o reprogramar un turno que ya tenés, escribí o llamá "
+    "directamente al consultorio al {telefono}. Por acá solo puedo tomar "
+    "turnos nuevos."
+)
+
+
+def mensaje_cancelacion(config: ConfigNegocio) -> str:
+    """El texto exacto con el que el bot deriva una cancelación (SPECS §9).
+
+    Los tests comparan la respuesta del modelo contra esta constante, no contra
+    si el texto "suena bien" (CODESTYLE, sección Testing).
+    """
+    return PLANTILLA_CANCELACION.format(telefono=config.negocio.telefono_contacto)
+
 
 def _formato_precio(precio: int) -> str:
     """32000 -> '$32.000' (separador de miles argentino)."""
@@ -103,6 +121,13 @@ Todos los turnos ocupan un bloque fijo de {config.duracion_slot_minutos} minutos
 
 QUIÉN ESCRIBE
 El nombre de perfil de WhatsApp de quien escribe es "{nombre_perfil}".
+
+QUÉ HACER CON CADA MENSAJE
+1. Si quiere sacar un turno nuevo, llamá a la tool `crear_turno`.
+2. Si pregunta por horarios, dirección, precios u obra social, llamá a la tool `consulta_general`.
+3. Si quiere cancelar o reprogramar un turno que ya tiene, NO llames a ninguna tool. Respondé con este texto exacto, palabra por palabra, sin agregar ni sacar nada:
+
+{mensaje_cancelacion(config)}
 
 CÓMO RESPONDER
 Escribí en español rioplatense, breve y cordial, como un mensaje de WhatsApp. Sin encabezados, sin listas largas, sin markdown."""
