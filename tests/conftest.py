@@ -10,7 +10,9 @@ de cuándo se corran los tests:
 
 from __future__ import annotations
 
+import json
 from datetime import date, datetime, time
+from pathlib import Path
 
 import pytest
 
@@ -61,3 +63,23 @@ def turnos_del_miercoles() -> list[Turno]:
         turno(MIERCOLES, time(11, 30), servicio_id="limpieza"),
         turno(MIERCOLES, time(16, 0), servicio_id="extraccion"),
     ]
+
+
+# ── Fixtures de payload de WhatsApp (CP3) ─────────────────────────────────
+
+RUTA_FIXTURES = Path(__file__).parent / "fixtures"
+
+# Datos de quien escribe en los fixtures de Meta. Ficticios, como todo el resto
+# (CLAUDE.md del repo): no corresponden a ningún número real.
+TELEFONO_PACIENTE = "5492615550199"
+PERFIL_PACIENTE = "Ignacio"
+
+
+def payload(nombre: str) -> dict:
+    """Carga `tests/fixtures/<nombre>.json` como dict.
+
+    Los fixtures son la estructura real de Meta, copiada tal cual: si Meta
+    cambia el sobre, se cambia el JSON y no el código del test.
+    """
+    with (RUTA_FIXTURES / f"{nombre}.json").open(encoding="utf-8") as archivo:
+        return json.load(archivo)
