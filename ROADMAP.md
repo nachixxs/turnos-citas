@@ -10,7 +10,7 @@ Referencia de alcance y decisiones de producto: `SPECS.md`. Este documento no re
 |---|---|---|---|
 | CP1 | Setup + motor de datos | — | **Hecho** |
 | CP2 | Agente Claude (tool use) y ruteo de 4 caminos | CP1 | **Hecho** |
-| CP3 | Endpoint FastAPI + parseo del webhook | CP2 | Pendiente |
+| CP3 | Endpoint FastAPI + parseo del webhook | CP2 | Implementado, falta verificar a mano |
 | CP4 | Orquestación n8n + prueba end-to-end | CP3 | Pendiente |
 | CP5 | Testing estructural completo | CP4 | Pendiente |
 | CP6 | README de portfolio + cierre | CP5 | Pendiente |
@@ -72,17 +72,41 @@ Fecha objetivo total: **martes 18 de agosto de 2026** (SPECS §14).
 **Tareas:**
 - Endpoint FastAPI que recibe el payload de WhatsApp Cloud API.
 - Parseo del payload: extracción directa de teléfono y nombre de perfil (nunca vía la IA — SPECS §6).
+- **Filtrado de los eventos de estado de WhatsApp** (ver abajo).
 - Invocación del agente de CP2 con el mensaje del cliente.
+- Composición determinista del mensaje al paciente desde el `ResultadoAgente`: cuando el modelo llama a una tool no escribe texto (verificado en CP2), así que la confirmación de un turno no puede venir de la respuesta del modelo.
+- Persistencia del turno confirmado en la Sheet.
 - Formato de respuesta compatible con el nodo "Respond to Webhook" de n8n.
 
-**Testing estructural:** con un payload fixture (ejemplo real de la estructura de Meta), el endpoint debe extraer teléfono y nombre correctamente y devolver el shape de respuesta esperado — verificado contra la estructura del JSON, no contra el contenido del mensaje.
+**Los tres payloads que manda Meta al mismo webhook.** WhatsApp entrega las
+notificaciones de "enviado", "entregado" y "leído" a la misma URL que los
+mensajes reales, y no son payloads malformados: son válidos y distintos. El
+sobre es casi idéntico —`changes[].field` vale `"messages"` en los dos casos— y
+lo único que los separa es qué lista viene poblada dentro de `value`. En la
+práctica es el caso que más aparece, bastante más que el payload roto. Sin el
+filtro, cada notificación dispara una llamada paga a la Claude API y produce
+errores intermitentes.
+
+| Qué llega | Dónde se ve | Qué hace el endpoint |
+|---|---|---|
+| Mensaje del paciente | `value.messages[]` | lo procesa |
+| Notificación de entregado/leído | `value.statuses[]` | lo ignora, sin llamar a la API |
+| Payload irreconocible | ninguno de los dos | lo ignora, sin romper el proceso |
+
+**Testing estructural:** un fixture por cada uno de los tres casos y un test por
+cada uno, verificados contra la estructura del JSON y los datos concretos
+extraídos, nunca contra el contenido conversacional del mensaje. El test del
+evento de estado además comprueba que no se llamó a la Claude API ni se leyó la
+Sheet.
 
 **Definition of Done:**
 - El endpoint responde 200 con el shape esperado ante un payload fixture válido.
 - Teléfono y nombre de perfil se resuelven del payload, nunca de la extracción de la IA.
+- Un evento de estado se ignora sin llamar a la Claude API ni leer la Sheet.
 - Manejo básico de payload malformado (no rompe el proceso).
+- Un turno confirmado queda persistido en la Sheet; si la escritura falla, no se le confirma al paciente.
 
-**Commits esperados:** endpoint base FastAPI · parseo de payload de WhatsApp · integración endpoint↔agente · formato de respuesta para n8n · tests del endpoint con fixture.
+**Commits esperados:** endpoint base FastAPI · parseo de payload de WhatsApp · integración endpoint↔agente · composición del mensaje al paciente · formato de respuesta para n8n · tests del endpoint con fixture.
 
 ---
 
