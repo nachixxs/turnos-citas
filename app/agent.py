@@ -23,7 +23,8 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.availability import Turno, esta_disponible
 from app.availability import alternativas as calcular_alternativas
-from app.config_loader import ConfigNegocio, RangoHorario
+from app.config_loader import ConfigNegocio
+from app.formato import fecha_en_palabras, formato_precio, formato_rango
 
 logger = logging.getLogger(__name__)
 
@@ -38,18 +39,6 @@ MAX_TOKENS = 16000
 # llamada a la tool como texto plano en vez de un bloque tool_use, el turno
 # termina sin error y el turno nunca se crea.
 EFFORT = "low"
-
-# `datetime.strftime('%A')` depende del locale del sistema y en Windows suele
-# devolver inglés. Se mapea a mano para que el prompt sea siempre en español.
-DIAS_SEMANA: list[str] = [
-    "lunes",
-    "martes",
-    "miércoles",
-    "jueves",
-    "viernes",
-    "sábado",
-    "domingo",
-]
 
 # Mensaje fijo del camino de cancelación / reprogramación (SPECS §9). Es una
 # plantilla y no un literal porque el teléfono cambia con cada cliente: el dato
@@ -70,32 +59,10 @@ def mensaje_cancelacion(config: ConfigNegocio) -> str:
     return PLANTILLA_CANCELACION.format(telefono=config.negocio.telefono_contacto)
 
 
-def _formato_precio(precio: int) -> str:
-    """32000 -> '$32.000' (separador de miles argentino)."""
-    return f"${precio:,}".replace(",", ".")
-
-
-def _formato_rango(rango: RangoHorario) -> str:
-    return f"{rango.inicio:%H:%M} a {rango.fin:%H:%M}"
-
-
-def _fecha_en_palabras(momento: datetime) -> str:
-    """'miércoles 19 de agosto de 2026' — legible para el modelo y para un humano."""
-    meses = [
-        "enero", "febrero", "marzo", "abril", "mayo", "junio",
-        "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
-    ]
-    dia_semana = DIAS_SEMANA[momento.weekday()]
-    return (
-        f"{dia_semana} {momento.day} de {meses[momento.month - 1]} "
-        f"de {momento.year}"
-    )
-
-
 def _catalogo_de_servicios(config: ConfigNegocio) -> str:
     """Una línea por servicio, con el id exacto que espera la tool."""
     return "\n".join(
-        f"- id `{s.id}`: {s.nombre}, {_formato_precio(s.precio)}"
+        f"- id `{s.id}`: {s.nombre}, {formato_precio(s.precio)}"
         for s in config.servicios
     )
 
@@ -115,7 +82,7 @@ def construir_prompt_sistema(
     negocio = config.negocio
 
     horarios = " y ".join(
-        _formato_rango(r) for r in config.horario_atencion.lunes_a_viernes
+        formato_rango(r) for r in config.horario_atencion.lunes_a_viernes
     )
     obra_social = (
         "Trabaja con obras sociales."
@@ -125,7 +92,7 @@ def construir_prompt_sistema(
 
     return f"""Sos el asistente de WhatsApp de {negocio.nombre}. Atendés a pacientes que escriben para sacar un turno o hacer consultas.
 
-Hoy es {_fecha_en_palabras(momento)} ({momento:%Y-%m-%d}). Resolvé contra esta fecha cualquier expresión relativa ("mañana", "el viernes", "la semana que viene"). Nunca asumas otra fecha ni inventes el año.
+Hoy es {fecha_en_palabras(momento)} ({momento:%Y-%m-%d}). Resolvé contra esta fecha cualquier expresión relativa ("mañana", "el viernes", "la semana que viene"). Nunca asumas otra fecha ni inventes el año.
 
 DATOS DEL CONSULTORIO
 - Dirección: {negocio.direccion}
