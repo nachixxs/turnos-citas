@@ -138,7 +138,7 @@ def construir_casos(con_turno: bool) -> list[Caso]:
 
 
 def correr_caso(numero: int, caso: Caso, url: str) -> bool:
-    print(f"\n── Caso {numero}: {caso.titulo}")
+    print(f"\n{numero}. {caso.titulo}")
 
     try:
         respuesta = httpx.post(url, json=caso.payload, timeout=120.0)
@@ -184,6 +184,12 @@ def correr_caso(numero: int, caso: Caso, url: str) -> bool:
 
 
 def main() -> int:
+    # La consola de Windows usa cp1252 por defecto y acá se imprime texto que
+    # viene del modelo, que puede traer cualquier caracter. Sin esto, un guion
+    # que anda bien igual termina en UnicodeEncodeError al imprimir.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--url", default=URL_POR_DEFECTO, help="URL del endpoint")
     parser.add_argument("--caso", type=int, help="correr un solo caso, por número")
@@ -213,7 +219,7 @@ def main() -> int:
         correr_caso(numero, caso, args.url) for numero, caso in zip(numeros, casos)
     ]
 
-    print(f"\n{'─' * 60}")
+    print("\n" + "=" * 70)
     print(f"{sum(resultados)}/{len(resultados)} casos como se esperaba")
     return 0 if all(resultados) else 1
 
