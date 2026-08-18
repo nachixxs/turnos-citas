@@ -11,12 +11,12 @@ de cuándo se corran los tests:
 from __future__ import annotations
 
 import json
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 
 import pytest
 
-from app.availability import Turno
+from app.availability import DIAS_HABILES, Turno
 from app.config_loader import ConfigNegocio, cargar_config
 
 MIERCOLES = date(2026, 8, 19)
@@ -83,3 +83,18 @@ def payload(nombre: str) -> dict:
     """
     with (RUTA_FIXTURES / f"{nombre}.json").open(encoding="utf-8") as archivo:
         return json.load(archivo)
+
+
+def proximo_dia_habil(dias_adelante: int = 7) -> date:
+    """Un día hábil futuro respecto del reloj real del sistema.
+
+    Los tests del endpoint corren el pipeline completo, que resuelve la
+    disponibilidad contra `datetime.now()` — no hay reloj que inyectar desde
+    afuera. Anclar a una fecha fija haría que estos tests empiecen a fallar solos
+    el día que esa fecha quede en el pasado; esta función los deja siempre
+    válidos sin volverlos no deterministas.
+    """
+    candidato = date.today() + timedelta(days=dias_adelante)
+    while candidato.weekday() not in DIAS_HABILES:
+        candidato += timedelta(days=1)
+    return candidato
