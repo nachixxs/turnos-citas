@@ -368,6 +368,10 @@ class ResultadoAgente(BaseModel):
 
     estado: EstadoResultado
     turno: Turno | None = None
+    # Fecha pedida. Solo se puebla en `slot_no_disponible`: es el dato que le
+    # falta a `alternativas` para poder decir "el miércoles 19 tengo libre...".
+    # En `turno_confirmado` la fecha ya viaja adentro del `Turno`.
+    fecha: date | None = None
     alternativas: list[time] = Field(default_factory=list)
     tema: TemaFAQ | None = None
     detalle: str = ""
@@ -414,6 +418,7 @@ def aplicar_decision(
         # SPECS §8: nunca rechazar sin ofrecer opciones, nunca redondear solo.
         return ResultadoAgente(
             estado="slot_no_disponible",
+            fecha=args.fecha,
             alternativas=calcular_alternativas(
                 args.fecha, args.hora, turnos, config, ahora=ahora
             ),

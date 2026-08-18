@@ -47,13 +47,16 @@ def formato_hora(hora: time) -> str:
     return f"{hora:%H:%M}"
 
 
-def fecha_en_palabras(momento: date | datetime) -> str:
-    """'miércoles 19 de agosto de 2026' — legible para el modelo y para un humano."""
+def fecha_en_palabras(momento: date | datetime, con_anio: bool = True) -> str:
+    """'miércoles 19 de agosto de 2026', o sin el año si `con_anio` es False.
+
+    El prompt de sistema lo quiere con año, para que el modelo no invente uno al
+    resolver "el viernes". El mensaje al paciente lo quiere sin: en un WhatsApp
+    sobre un turno de la semana que viene, el año sobra.
+    """
     dia_semana = DIAS_SEMANA[momento.weekday()]
-    return (
-        f"{dia_semana} {momento.day} de {MESES[momento.month - 1]} "
-        f"de {momento.year}"
-    )
+    base = f"{dia_semana} {momento.day} de {MESES[momento.month - 1]}"
+    return f"{base} de {momento.year}" if con_anio else base
 
 
 def listar_horas(horas: list[time]) -> str:
