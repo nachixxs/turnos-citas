@@ -11,7 +11,7 @@ Referencia de alcance y decisiones de producto: `SPECS.md`. Este documento no re
 | CP1 | Setup + motor de datos | — | **Hecho** |
 | CP2 | Agente Claude (tool use) y ruteo de 4 caminos | CP1 | **Hecho** |
 | CP3 | Endpoint FastAPI + parseo del webhook | CP2 | **Hecho** |
-| CP4 | Orquestación n8n + prueba end-to-end | CP3 | Pendiente |
+| CP4 | Orquestación n8n + prueba end-to-end | CP3 | En preparación |
 | CP5 | Testing estructural completo | CP4 | Pendiente |
 | CP6 | README de portfolio + cierre | CP5 | Pendiente |
 
@@ -115,17 +115,55 @@ Sheet.
 **Objetivo:** conectar el número de WhatsApp de prueba con el endpoint de CP3 a través de n8n y validar el flujo real de punta a punta.
 
 **Tareas:**
-- Flujo n8n: Webhook → IF → Respond to Webhook.
-- Configuración del número de prueba de WhatsApp Cloud API (Meta).
+- Flujo n8n (ver abajo: el patrón de SPECS §12 se quedaba corto).
+- Configuración del número de prueba de WhatsApp Cloud API (Meta), en una app **nueva**.
 - Conexión del Webhook de n8n al endpoint de CP3.
 
-**Testing estructural:** conversación real con el número de prueba cubriendo al menos un caso de cada uno de los 4 caminos, verificado contra qué pasó realmente (turno guardado en la Sheet, tool llamada, mensaje fijo de cancelación mostrado) — no contra si "se sintió bien" la charla.
+**Corrección al flujo de SPECS §12.** `Webhook → IF → Respond to Webhook` no
+alcanza: "Respond to Webhook" le contesta a Meta, y **responder 200 no le envía
+nada al paciente**. El mensaje sale por un POST aparte a
+`graph.facebook.com/<version>/<phone_number_id>/messages`. Por eso el endpoint de
+CP3 devuelve `telefono` además de `respuesta`: son los dos campos de ese POST.
+
+Además hace falta un **segundo webhook, en GET**: Meta valida la URL mandando
+`hub.mode`, `hub.verify_token` y `hub.challenge`, y espera el challenge devuelto
+en texto plano. Sin eso no deja suscribir el webhook.
+
+El flujo completo queda:
+
+```
+Webhook GET  → Verificar token → Responder challenge / Rechazar (403)
+Webhook POST → Filtrar eventos de estado
+                 ├─ hay messages → Llamar a FastAPI → ¿respuesta vacía?
+                 │                                      ├─ no → Responder por WhatsApp
+                 │                                      └─ sí → Nada para enviar
+                 └─ statuses     → Ignorar evento de estado
+```
+
+El webhook POST responde 200 de inmediato en vez de esperar al final del flujo:
+si esperara a Claude, Meta cortaría por timeout y reintentaría el mismo mensaje.
+
+**Testing estructural, en dos etapas.** Primero el flujo sin Meta, con
+`scripts/verificar_n8n.py`: corre el circuito completo —n8n → FastAPI → Claude →
+Sheets → envío— reemplazando solo la Graph API por un doble local que registra el
+POST que habría salido. Se verifica que salga, a qué número (con el "9" ya
+sacado) y con qué texto exacto, comparado contra las constantes importadas del
+código. Encontrar un error del workflow ahí sale mucho más barato que con Meta en
+el medio.
+
+Después sí, conversación real con el número de prueba cubriendo al menos un caso
+de cada uno de los 4 caminos, verificado contra qué pasó realmente (turno
+guardado en la Sheet, tool llamada, mensaje fijo de cancelación mostrado) — no
+contra si "se sintió bien" la charla.
 
 **Definition of Done:**
 - Al menos un mensaje real de cada camino (turno nuevo, FAQ, cancelación, repregunta) llega, se procesa y responde correctamente de punta a punta.
 - Un turno creado por este flujo aparece efectivamente en la Sheet.
 
-**Commits esperados:** export del flujo n8n versionado en el repo · ajustes de configuración de conexión · notas de troubleshooting si aparecen (documentadas, no solo resueltas en la UI de n8n).
+**Commits esperados:** plantilla del flujo n8n versionada en el repo (con
+placeholders, nunca con el token) · guiones de configuración de n8n y de Meta ·
+guion de verificación del flujo · notas de troubleshooting si aparecen
+(documentadas, no solo resueltas en la UI de n8n).
 
 ---
 

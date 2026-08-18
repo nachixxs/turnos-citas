@@ -19,7 +19,7 @@ CP4.
 | CP1 | Setup + motor de datos | **Hecho** |
 | CP2 | Agente Claude (tool use) y ruteo de 4 caminos | **Hecho** |
 | CP3 | Endpoint FastAPI + parseo del webhook | **Hecho** |
-| CP4 | Orquestación n8n + prueba end-to-end | Pendiente |
+| CP4 | Orquestación n8n + prueba end-to-end | En preparación |
 | CP5 | Testing estructural completo | Pendiente |
 | CP6 | README de portfolio + cierre | Pendiente |
 
@@ -180,6 +180,79 @@ dispara una llamada paga a la Claude API y una lectura de la planilla.
 **Mensajes que no son de texto.** Un audio, una foto o un sticker devuelven
 `tipo_no_soportado` con un mensaje fijo pidiendo que escriba. No se llama a la
 API. Dejarlo sin respuesta haría que el bot parezca roto.
+
+## CP4 — lo que ya está preparado
+
+Todo lo que no depende de Meta está armado y verificado. **El flujo completo se
+probó de punta a punta sin Meta**: 6/6 casos, reemplazando solo a la Graph API
+por un doble local que registra el POST que habría salido.
+
+**Entorno, ya confirmado en esta máquina:**
+
+| Pieza | Estado |
+|---|---|
+| ngrok 3.39.9 | instalado, authtoken configurado |
+| n8n 2.6.3 | instalado global por npm, con `import:workflow` y `publish:workflow` |
+| Docker | no instalado, y no hace falta |
+
+**Archivos:**
+
+| Archivo | Qué hace |
+|---|---|
+| `n8n/flow.template.json` | El workflow, con placeholders en vez de secretos |
+| `scripts/configurar_n8n.py` | Renderiza con los valores de `.env`, importa y publica |
+| `scripts/configurar_meta.py` | Registra el callback y crea `subscribed_apps`, por Graph API |
+| `scripts/verificar_n8n.py` | Corre el flujo entero contra un doble de la Graph API |
+
+`n8n/flow.local.json` es el renderizado con el token real y está gitignoreado.
+Al repo solo va la plantilla.
+
+**El flujo, 11 nodos:**
+
+```
+Webhook GET  → Verificar token → Responder challenge / Rechazar (403)
+Webhook POST → Filtrar eventos de estado
+                 ├─ hay messages → Llamar a FastAPI → ¿respuesta vacía?
+                 │                                      ├─ no → Responder por WhatsApp
+                 │                                      └─ sí → Nada para enviar
+                 └─ statuses     → Ignorar evento de estado
+```
+
+**Las trampas de El Parador, ya resueltas de entrada** (cada una anotada en el
+campo `notes` del nodo correspondiente):
+
+| Trampa | Cómo quedó resuelta |
+|---|---|
+| `localhost` resuelve a IPv6 en Windows | El nodo llama a `http://127.0.0.1:8000` |
+| El "9" de los números argentinos | `.replace(/^549(\d+)$/, '54$1')` antes de enviar |
+| Expresiones `$json` implícitas | Se referencia el nodo por nombre: `$('Llamar a FastAPI')` |
+| Nodos "resource mapper" solo configurables por UI | No hay ninguno: la Sheet la escribe FastAPI |
+| Guardar no es publicar | `configurar_n8n.py` corre `publish:workflow` |
+| Activar por API no registra el webhook | El guion avisa que hay que reiniciar n8n |
+| El puerto 5678 abre antes de registrar los webhooks | `verificar_n8n.py` sondea la URL hasta que deja de dar 404 |
+| El enlace invisible `subscribed_apps` | `configurar_meta.py` lo crea y lo verifica leyéndolo de vuelta |
+
+**Ojo:** el workflow que quedó cargado en n8n tiene **valores de mentira** (token
+falso y la Graph API apuntando al doble local). Correr `configurar_n8n.py` con el
+`.env` real lo pisa; hasta entonces no manda nada a WhatsApp de verdad.
+
+## CP4 — el orden exacto
+
+Lo único manual es el paso 1: no existe Graph API para crear apps.
+
+1. **En developers.facebook.com**: crear una app **nueva** (Business → producto
+   WhatsApp). No reusar la de El Parador: la URL del webhook se configura por
+   app, y apuntarla acá deja al cliente sin bot. Completar en `.env` los cinco
+   valores de `.env.example`, y agregar tu número como destinatario de prueba.
+2. `ngrok http 5678` — la URL pública la leen los guiones solos.
+3. `configurar_n8n.py`, y **reiniciar n8n**.
+4. `configurar_meta.py` — registra el callback y crea `subscribed_apps`.
+5. `verificar_n8n.py` — el flujo, antes de meter a Meta en el medio.
+6. Conversación real por WhatsApp, un mensaje por cada camino de SPECS §3.
+
+Si algo falla en el paso 6, el orden de sospecha es: `subscribed_apps` primero
+(es invisible y fue lo más caro en El Parador), después si reiniciaste n8n, y
+recién al final la lógica del workflow.
 
 ## Hallazgo abierto — para CP5
 

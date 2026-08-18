@@ -21,9 +21,13 @@ Siempre con el Python del venv, nunca el global:
 
 .venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000  # servidor del webhook
 .venv\Scripts\python.exe scripts\verificar_webhook.py  # real, contra el servidor
+
+.venv\Scripts\python.exe scripts\configurar_n8n.py    # importa el workflow (CP4)
+.venv\Scripts\python.exe scripts\configurar_meta.py   # real, contra la Graph API
+.venv\Scripts\python.exe scripts\verificar_n8n.py     # el flujo, sin Meta
 ```
 
-Los tres scripts de `scripts/` usan credenciales reales: los corre la persona, no Claude Code, salvo autorización explícita. Setup completo del entorno en `ESTADO.md`.
+Los guiones de `scripts/` usan credenciales reales: los corre la persona, no Claude Code, salvo autorización explícita. Setup completo del entorno en `ESTADO.md`.
 
 ## Testing
 
