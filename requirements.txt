@@ -1,10 +1,13 @@
-# Dependencias hasta CP2 (motor de datos + agente Claude).
-# FastAPI (CP3) se suma en su checkpoint, no antes — ver ROADMAP.md.
+# Dependencias hasta CP3 (motor de datos + agente Claude + endpoint del webhook).
 
-pydantic==2.13.4          # validacion de config y modelos de dominio
+pydantic==2.13.4          # validacion de config, payload del webhook y modelos de dominio
 gspread==6.2.1            # cliente de Google Sheets
 google-auth==2.56.3       # credenciales de service account
 python-dotenv==1.2.3      # carga de .env
 anthropic==0.122.0        # SDK de Claude (tool use)
 
+fastapi==0.141.1          # endpoint del webhook (CP3)
+uvicorn==0.52.3           # servidor ASGI para levantar la app en local
+
 pytest==9.1.1             # testing
+httpx==0.28.1             # lo usa TestClient de FastAPI para los tests del endpoint
