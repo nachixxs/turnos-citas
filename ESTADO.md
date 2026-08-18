@@ -8,16 +8,17 @@ MVP de agendamiento de turnos por WhatsApp con IA, primera de las 4 automatizaci
 
 ## Estado actual
 
-**Fase:** CP3 implementado — el endpoint expone el agente por HTTP, parsea el
-payload de Meta, persiste el turno confirmado y devuelve el shape que consume
-n8n. 127 tests pasando. Falta la verificación manual contra el servidor real
-(`scripts/verificar_webhook.py`) antes de darlo por cerrado.
+**Fase:** CP3 cerrado — el endpoint expone el agente por HTTP, parsea el payload
+de Meta, filtra los eventos de estado, persiste el turno confirmado y devuelve
+el shape que consume n8n. 127 tests pasando y 7/7 casos del guion verificados
+contra el servidor real, incluida la escritura efectiva en la Sheet. Próximo:
+CP4.
 
 | CP | Nombre | Estado |
 |---|---|---|
 | CP1 | Setup + motor de datos | **Hecho** |
 | CP2 | Agente Claude (tool use) y ruteo de 4 caminos | **Hecho** |
-| CP3 | Endpoint FastAPI + parseo del webhook | Implementado, falta verificar a mano |
+| CP3 | Endpoint FastAPI + parseo del webhook | **Hecho** |
 | CP4 | Orquestación n8n + prueba end-to-end | Pendiente |
 | CP5 | Testing estructural completo | Pendiente |
 | CP6 | README de portfolio + cierre | Pendiente |
@@ -128,8 +129,20 @@ Editor: sin eso, la API devuelve 403 aunque las credenciales sean válidas.
 
 ## Próximo paso
 
-Verificar CP3 a mano con `scripts/verificar_webhook.py` (servidor levantado) y
-después arrancar CP4: flujo de n8n y número de prueba de Meta. Ver `ROADMAP.md`.
+Arrancar CP4: flujo de n8n (Webhook → IF → Respond to Webhook), número de prueba
+de WhatsApp Cloud API y prueba end-to-end. Ver `ROADMAP.md`.
+
+Dos cosas que salen de la verificación de CP3 y condicionan CP4:
+
+**El endpoint no envía el mensaje.** Responder 200 al webhook no hace que
+WhatsApp le entregue nada al paciente: el envío es un POST aparte a
+`graph.facebook.com/<version>/<phone_number_id>/messages` con el token de Meta.
+Por eso la respuesta del endpoint trae `telefono` además de `respuesta` — n8n
+tiene que armar ese POST con los dos campos.
+
+**El nodo IF rutea por `estado`.** Cuando `respuesta` viene vacía
+(`ignorado_evento_estado`, `payload_invalido`) no hay que enviar nada. Es el
+filtro que evita contestarle a una notificación de "leído".
 
 ## Decisiones de CP3
 
@@ -167,6 +180,23 @@ dispara una llamada paga a la Claude API y una lectura de la planilla.
 **Mensajes que no son de texto.** Un audio, una foto o un sticker devuelven
 `tipo_no_soportado` con un mensaje fijo pidiendo que escriba. No se llama a la
 API. Dejarlo sin respuesta haría que el bot parezca roto.
+
+## Hallazgo abierto — para CP5
+
+**En el camino de repregunta, el modelo afirma disponibilidad que no verificó.**
+Apareció en el caso 6 del guion de CP3, en las dos corridas:
+
+> "El 16/9 a las 10:00 lo tengo anotado. ¿Para qué servicio lo querés?"
+
+En ese camino no se llama a ninguna tool, así que la Sheet nunca se leyó: el
+modelo no tiene forma de saber si ese slot está libre, y "lo tengo anotado"
+además sugiere que ya quedó reservado. Si el horario estaba ocupado, el paciente
+contesta el servicio y el bot se contradice ofreciéndole alternativas.
+
+No es un fallo del endpoint —el ruteo y el `estado` son correctos— sino del
+texto que redacta el modelo. Se corrige en el prompt de sistema: al repreguntar,
+no afirmar disponibilidad ni dar por tomado el turno. Queda para CP5, que es
+donde viven los fixes que salen de los casos de borde.
 
 ## Documentos relacionados
 

@@ -10,7 +10,7 @@ Referencia de alcance y decisiones de producto: `SPECS.md`. Este documento no re
 |---|---|---|---|
 | CP1 | Setup + motor de datos | — | **Hecho** |
 | CP2 | Agente Claude (tool use) y ruteo de 4 caminos | CP1 | **Hecho** |
-| CP3 | Endpoint FastAPI + parseo del webhook | CP2 | Implementado, falta verificar a mano |
+| CP3 | Endpoint FastAPI + parseo del webhook | CP2 | **Hecho** |
 | CP4 | Orquestación n8n + prueba end-to-end | CP3 | Pendiente |
 | CP5 | Testing estructural completo | CP4 | Pendiente |
 | CP6 | README de portfolio + cierre | CP5 | Pendiente |
@@ -140,6 +140,7 @@ Sheet.
 - Consulta sobre obra social (respuesta: solo atención particular).
 - Consulta de precios y horarios (FAQ básico).
 - Intento de resolver una urgencia → confirmar que no se ofrece como opción ni se responde con info específica (fuera de alcance, SPECS §7).
+- Repregunta que afirma disponibilidad sin verificarla → en el camino de repregunta no se llama a ninguna tool y la Sheet nunca se lee, así que el modelo no puede saber si el horario está libre. Detectado en el guion de CP3 (ver `ESTADO.md`, "Hallazgo abierto"); se corrige en el prompt de sistema.
 
 **Testing estructural:** cada caso se verifica contra el dato real esperado (id de servicio devuelto, slot ofrecido, tool llamada o no llamada), documentado en el propio guion de testing — no evaluación subjetiva de la respuesta en texto.
 
