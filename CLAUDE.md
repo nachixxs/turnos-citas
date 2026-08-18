@@ -18,9 +18,12 @@ Siempre con el Python del venv, nunca el global:
 .venv\Scripts\python.exe -m pytest              # tests: sin credenciales ni red
 .venv\Scripts\python.exe scripts\verificar_sheets.py   # real, contra Google Sheets
 .venv\Scripts\python.exe scripts\verificar_agente.py   # real, contra la Claude API
+
+.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000  # servidor del webhook
+.venv\Scripts\python.exe scripts\verificar_webhook.py  # real, contra el servidor
 ```
 
-Los dos scripts de `scripts/` usan credenciales reales: los corre la persona, no Claude Code, salvo autorización explícita. Setup completo del entorno en `ESTADO.md`.
+Los tres scripts de `scripts/` usan credenciales reales: los corre la persona, no Claude Code, salvo autorización explícita. Setup completo del entorno en `ESTADO.md`.
 
 ## Testing
 
