@@ -17,6 +17,10 @@ client_secret*.json
 *.key
 *.pem
 
+# Workflow de n8n renderizado con los valores reales de .env. La plantilla
+# versionada es n8n/flow.template.json, que solo tiene placeholders.
+n8n/flow.local.json
+
 # ─────────────────────────────────────────────────────────────
 # Python
 # ─────────────────────────────────────────────────────────────
