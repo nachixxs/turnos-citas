@@ -47,7 +47,12 @@ REEMPLAZOS: dict[str, str] = {
     "<VERIFY_TOKEN>": "META_VERIFY_TOKEN",
     "<WHATSAPP_PHONE_ID>": "WHATSAPP_PHONE_ID",
     "<WHATSAPP_TOKEN>": "WHATSAPP_TOKEN",
+    "<GRAPH_API_BASE>": "GRAPH_API_BASE",
 }
+
+# La Graph API real. Se pisa con GRAPH_API_BASE para correr el flujo entero
+# contra un doble local y verificar CP4 sin depender de Meta.
+GRAPH_API_POR_DEFECTO = "https://graph.facebook.com/v21.0"
 
 ID_WORKFLOW = "turnos-citas-cp4"
 
@@ -64,6 +69,8 @@ def renderizar() -> tuple[str, list[str]]:
     faltantes: list[str] = []
     for marca, variable in REEMPLAZOS.items():
         valor = os.getenv(variable, "")
+        if not valor and variable == "GRAPH_API_BASE":
+            valor = GRAPH_API_POR_DEFECTO
         if not valor:
             faltantes.append(variable)
             continue

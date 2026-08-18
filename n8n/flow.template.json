@@ -184,7 +184,7 @@
       "position": [660, -40],
       "parameters": {
         "method": "POST",
-        "url": "https://graph.facebook.com/v21.0/<WHATSAPP_PHONE_ID>/messages",
+        "url": "<GRAPH_API_BASE>/<WHATSAPP_PHONE_ID>/messages",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -203,7 +203,7 @@
         "jsonBody": "={{ { \"messaging_product\": \"whatsapp\", \"to\": $('Llamar a FastAPI').item.json.telefono.replace(/^549(\\d+)$/, '54$1'), \"type\": \"text\", \"text\": { \"body\": $('Llamar a FastAPI').item.json.respuesta } } }}",
         "options": {}
       },
-      "notes": "Responder 200 al webhook NO envia nada: el mensaje sale por este POST aparte. El .replace saca el 9 de los numeros argentinos, que Meta rechaza si no coincide exacto con como quedo registrado. Se referencia el nodo por nombre ($('Llamar a FastAPI')) y no con $json implicito, que se rompe al insertar un nodo en el medio."
+      "notes": "Responder 200 al webhook NO envia nada: el mensaje sale por este POST aparte. El .replace saca el 9 de los numeros argentinos, que Meta rechaza si no coincide exacto con como quedo registrado. Se referencia el nodo por nombre ($('Llamar a FastAPI')) y no con $json implicito, que se rompe al insertar un nodo en el medio. La base de la URL es sustituible para poder testear el flujo entero contra un doble local, sin Meta."
     },
     {
       "id": "ignorar-evento-estado",
