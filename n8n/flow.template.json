@@ -1,0 +1,254 @@
+{
+  "id": "turnos-citas-cp4",
+  "name": "Turnos / Citas - WhatsApp a FastAPI",
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "nodes": [
+    {
+      "id": "webhook-get-verificacion",
+      "name": "Webhook GET (verificacion Meta)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-260, -160],
+      "webhookId": "turnos-citas-webhook",
+      "parameters": {
+        "path": "turnos-citas",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "notes": "Meta valida la URL con un GET que trae hub.mode, hub.verify_token y hub.challenge. Sin responder ese challenge no deja suscribir el webhook."
+    },
+    {
+      "id": "verificar-token",
+      "name": "Verificar token",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [-40, -160],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "verify-token-check",
+              "leftValue": "={{ $json.query['hub.verify_token'] }}",
+              "rightValue": "<VERIFY_TOKEN>",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "responder-challenge",
+      "name": "Responder challenge",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [200, -260],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.query['hub.challenge'] }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "notes": "El challenge se devuelve en texto plano, sin comillas ni JSON. Si se responde como JSON, Meta rechaza la verificacion."
+    },
+    {
+      "id": "rechazar-verificacion",
+      "name": "Rechazar verificacion",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [200, -60],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "forbidden",
+        "options": {
+          "responseCode": 403
+        }
+      }
+    },
+    {
+      "id": "webhook-post-mensajes",
+      "name": "Webhook POST (mensajes)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-260, 160],
+      "webhookId": "turnos-citas-webhook",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "turnos-citas",
+        "options": {}
+      },
+      "notes": "Mismo path que el webhook GET: n8n separa por metodo. Responde 200 de inmediato y sigue procesando: si esperara a Claude, Meta cortaria por timeout y reintentaria el mismo mensaje."
+    },
+    {
+      "id": "filtrar-eventos-estado",
+      "name": "Filtrar eventos de estado",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [-40, 160],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "hay-messages-check",
+              "leftValue": "={{ !!$json.body?.entry?.[0]?.changes?.[0]?.value?.messages }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "notes": "WhatsApp manda 'enviado', 'entregado' y 'leido' a esta misma URL, con changes[].field valiendo 'messages' igual que un mensaje real. Lo unico que los distingue es si viene poblado value.messages o value.statuses. FastAPI tambien filtra; este IF evita el salto HTTP por cada notificacion."
+    },
+    {
+      "id": "llamar-fastapi",
+      "name": "Llamar a FastAPI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [200, 60],
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8000/webhook",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.body }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "notes": "127.0.0.1 y no localhost: en Windows localhost resuelve a IPv6 y uvicorn escucha en IPv4. Se reenvia el sobre de Meta entero: el parseo vive en app/webhook.py, no en n8n."
+    },
+    {
+      "id": "hay-algo-para-responder",
+      "name": "Hay algo para responder",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [420, 60],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "respuesta-no-vacia",
+              "leftValue": "={{ $json.respuesta }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "notes": "respuesta vacia = no hay nada que enviarle al paciente (evento de estado o payload invalido que se colo). Es la misma senal que devuelve el endpoint en esos estados."
+    },
+    {
+      "id": "responder-por-whatsapp",
+      "name": "Responder por WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, -40],
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v21.0/<WHATSAPP_PHONE_ID>/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer <WHATSAPP_TOKEN>"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"messaging_product\": \"whatsapp\", \"to\": $('Llamar a FastAPI').item.json.telefono.replace(/^549(\\d+)$/, '54$1'), \"type\": \"text\", \"text\": { \"body\": $('Llamar a FastAPI').item.json.respuesta } } }}",
+        "options": {}
+      },
+      "notes": "Responder 200 al webhook NO envia nada: el mensaje sale por este POST aparte. El .replace saca el 9 de los numeros argentinos, que Meta rechaza si no coincide exacto con como quedo registrado. Se referencia el nodo por nombre ($('Llamar a FastAPI')) y no con $json implicito, que se rompe al insertar un nodo en el medio."
+    },
+    {
+      "id": "ignorar-evento-estado",
+      "name": "Ignorar evento de estado",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [200, 300],
+      "parameters": {}
+    },
+    {
+      "id": "nada-para-enviar",
+      "name": "Nada para enviar",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [660, 180],
+      "parameters": {}
+    }
+  ],
+  "connections": {
+    "Webhook GET (verificacion Meta)": {
+      "main": [[{ "node": "Verificar token", "type": "main", "index": 0 }]]
+    },
+    "Verificar token": {
+      "main": [
+        [{ "node": "Responder challenge", "type": "main", "index": 0 }],
+        [{ "node": "Rechazar verificacion", "type": "main", "index": 0 }]
+      ]
+    },
+    "Webhook POST (mensajes)": {
+      "main": [[{ "node": "Filtrar eventos de estado", "type": "main", "index": 0 }]]
+    },
+    "Filtrar eventos de estado": {
+      "main": [
+        [{ "node": "Llamar a FastAPI", "type": "main", "index": 0 }],
+        [{ "node": "Ignorar evento de estado", "type": "main", "index": 0 }]
+      ]
+    },
+    "Llamar a FastAPI": {
+      "main": [[{ "node": "Hay algo para responder", "type": "main", "index": 0 }]]
+    },
+    "Hay algo para responder": {
+      "main": [
+        [{ "node": "Responder por WhatsApp", "type": "main", "index": 0 }],
+        [{ "node": "Nada para enviar", "type": "main", "index": 0 }]
+      ]
+    }
+  }
+}
