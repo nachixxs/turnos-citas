@@ -236,14 +236,48 @@ campo `notes` del nodo correspondiente):
 falso y la Graph API apuntando al doble local). Correr `configurar_n8n.py` con el
 `.env` real lo pisa; hasta entonces no manda nada a WhatsApp de verdad.
 
+## CP4 — el estado de Meta
+
+La app ya está creada y los seis valores están cargados en `.env`, verificados
+contra la Graph API. Ningún valor real se versiona: acá se describe qué es cada
+cosa, no cuánto vale.
+
+| Qué | Estado |
+|---|---|
+| App de Meta | creada, **nueva**, separada de la de El Parador |
+| Token | **de usuario de sistema, permanente** — no vence, no hay que renovarlo |
+| Permisos del token | `whatsapp_business_management`, `whatsapp_business_messaging` |
+| Acceso del token al WABA | confirmado (lee `subscribed_apps` sin 403) |
+| Número de prueba | el que Meta asigna, con su `phone_number_id` en `.env` |
+| Callback registrado en Meta | **no** — lo hace `scripts/configurar_meta.py` |
+| App suscrita al WABA | **no** — lo hace el mismo guion |
+
+**El WABA de prueba es compartido, y no hay forma de que no lo sea.** Meta da un
+solo "Test WhatsApp Business Account" por cuenta de desarrollador, así que el
+mismo WABA que usa Turnos ya tiene suscrita la app de El Parador
+(`Accelerate Restaurant Bot`). Eso está bien y no rompe nada: la **URL del
+webhook se configura por app**, y como la app de Turnos es nueva, tiene la suya
+propia y la de El Parador queda intacta.
+
+La consecuencia práctica sí importa: **los dos bots reciben los mensajes de ese
+número**. Mientras se trabaje en Turnos, no levantar el stack de El Parador, o
+los dos van a contestar el mismo mensaje.
+
+**Por qué un token de sistema y no el temporal.** El temporal del panel dura
+24hs, y cuando vence el síntoma es que todo funcionaba y de golpe los envíos
+fallan con un error de permisos que no apunta al token — el bug que en El Parador
+apareció una y otra vez. El de sistema se crea en business.facebook.com →
+Business settings → Users → System users, y hay que darle acceso a **dos**
+activos, no uno: la app y la WhatsApp Account. Si falta el segundo, el token se
+genera igual pero después tira 403 al tocar el WABA.
+
 ## CP4 — el orden exacto
 
 Lo único manual es el paso 1: no existe Graph API para crear apps.
 
-1. **En developers.facebook.com**: crear una app **nueva** (Business → producto
-   WhatsApp). No reusar la de El Parador: la URL del webhook se configura por
-   app, y apuntarla acá deja al cliente sin bot. Completar en `.env` los cinco
-   valores de `.env.example`, y agregar tu número como destinatario de prueba.
+1. ~~Crear la app de Meta y cargar `.env`~~ — **hecho**, ver "el estado de
+   Meta" arriba. Lo único que puede faltar es tener tu número cargado como
+   destinatario de prueba en el panel (WhatsApp → API Setup → desplegable "To").
 2. `ngrok http 5678` — la URL pública la leen los guiones solos.
 3. `configurar_n8n.py`, y **reiniciar n8n**.
 4. `configurar_meta.py` — registra el callback y crea `subscribed_apps`.
