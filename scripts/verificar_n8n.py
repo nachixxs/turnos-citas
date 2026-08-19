@@ -31,6 +31,10 @@ Uso:
     .venv\\Scripts\\python.exe scripts/verificar_n8n.py
     .venv\\Scripts\\python.exe scripts/verificar_n8n.py --caso 3
 
+El verify token sale de `META_VERIFY_TOKEN` —del entorno si esta exportada, y
+si no del `.env`— porque tiene que ser el mismo que quedo dentro del workflow
+importado.
+
 La verificación es estructural: se compara contra las constantes importadas del
 propio código y contra los datos del `config/negocio.json`, nunca contra si el
 texto "suena bien".
@@ -40,6 +44,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import threading
 import time
@@ -48,9 +53,14 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+from dotenv import load_dotenv
 
 RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RAIZ))
+
+# Antes de leer VERIFY_TOKEN de abajo: las variables ya exportadas a mano en la
+# terminal ganan, que es como se corre contra el doble.
+load_dotenv(RAIZ / ".env", override=False)
 
 from app.config_loader import cargar_config  # noqa: E402
 from app.respuestas import MENSAJE_TIPO_NO_SOPORTADO, respuesta_faq  # noqa: E402
@@ -60,7 +70,10 @@ DIFF = "[DIFF]"
 
 URL_N8N = "http://127.0.0.1:5678/webhook/turnos-citas"
 PUERTO_DOBLE = 8099
-VERIFY_TOKEN = "prueba-local"
+# El mismo string que quedo importado en el workflow. Cuando se corre contra el
+# doble se exporta a mano; con el .env real sale de ahi. Hardcodearlo hacia que
+# el primer caso fallara por el token y no por el flujo, que es lo que se mide.
+VERIFY_TOKEN = os.getenv("META_VERIFY_TOKEN") or "prueba-local"
 
 RUTA_FIXTURES = RAIZ / "tests" / "fixtures"
 
