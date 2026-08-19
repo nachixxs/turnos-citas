@@ -121,6 +121,14 @@ Cuando esto se venda a un cliente real: recordatorios automáticos antes del tur
 - **Persistencia:** Google Sheets (turnos confirmados)
 - **Configuración por negocio:** archivo JSON/YAML (sección 5), nunca hardcodeado en el código
 
+> **Corrección posterior (CP4).** El flujo de n8n de arriba se quedó corto y se
+> deja tal cual como registro de lo que se planeó. `Webhook → IF → Respond to
+> Webhook` no alcanza por dos motivos que aparecieron al construirlo:
+> responder 200 al webhook **no** le envía nada al paciente —el mensaje sale por
+> un POST aparte a la Graph API— y Meta exige un segundo webhook en GET para
+> validar la URL devolviendo su `hub.challenge`. El flujo real tiene 11 nodos y
+> está en `ROADMAP.md`, sección CP4. El resto de esta sección sigue vigente.
+
 ## 13. Entregables esperados
 
 - Repo funcional con el código del MVP
