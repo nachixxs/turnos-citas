@@ -129,6 +129,38 @@ fecha | hora | servicio_id | nombre_paciente | telefono | creado_en
 Además, hay que compartirla con el email de la service account con permiso de
 Editor: sin eso, la API devuelve 403 aunque las credenciales sean válidas.
 
+### Levantar el stack completo (CP4)
+
+El orden importa y cada paso depende del anterior. En terminales aparte:
+
+```powershell
+# 1. El tunel. La URL publica la leen los guiones solos de 127.0.0.1:4040.
+ngrok http 5678
+
+# 2. El backend.
+.venv\Scripts\python.exe -m uvicorn app.main:app --port 8000
+
+# 3. El workflow, con n8n FRENADO. Esto pisa lo que hubiera importado antes.
+.venv\Scripts\python.exe scripts\configurar_n8n.py
+
+# 4. n8n. Arrancarlo DESPUES de importar, no antes.
+n8n start
+
+# 5. Meta: registra el callback y crea subscribed_apps. Idempotente.
+.venv\Scripts\python.exe scripts\configurar_meta.py
+
+# 6. El flujo, antes de meter a Meta en el medio.
+.venv\Scripts\python.exe scripts\verificar_n8n.py
+```
+
+Entre el 4 y el 5, esperar a que n8n registre los webhooks: el puerto 5678
+acepta conexiones antes de que la URL responda, y en el medio da 404 aunque el
+workflow figure publicado. `verificar_n8n.py` ya sondea hasta que deja de dar
+404.
+
+**Antes de probar, despublicar El Parador** (ver "las tres sorpresas de CP4"):
+comparte esta instancia de n8n y el puerto 8000.
+
 ## Próximo paso
 
 Arrancar CP5: testing estructural de los bordes de SPECS §7 y §8, empezando por
@@ -370,6 +402,30 @@ de `META_VERIFY_TOKEN` y, si el workflow importado apunta a Meta, los cuatro
 casos de envío quedan **omitidos** en vez de fallar — medirían cómo está
 configurado el flujo, no el flujo. Contra el workflow real da `2/2 (4 omitidos)`;
 contra el doble sigue dando 6/6.
+
+### En qué estado quedó la máquina al cerrar CP4
+
+| Cosa | Cómo quedó | Qué hacer |
+|---|---|---|
+| ngrok, uvicorn, n8n | frenados | levantarlos con los 6 pasos de "Levantar el stack completo" |
+| Workflow de Turnos | importado desde el `.env` real y publicado | nada |
+| Workflow de El Parador | **despublicado** | `n8n publish:workflow --id=PtRTAyRQc8o19Zg7` y reiniciar n8n, cuando se vuelva a ese proyecto |
+| Callback en Meta | registrado, campo `messages`, app suscrita al WABA | nada mientras el dominio de ngrok no cambie |
+| Turno de prueba en la Sheet | `2026-08-20 · 10:00 · limpieza` | **dejarlo**: es la evidencia del DoD de CP4 y sirve de slot ocupado para CP5 |
+
+**Pendiente manual: rotar `META_VERIFY_TOKEN`.** Durante CP4 el token quedó
+expuesto en el historial de una sesión de Claude Code, al imprimir las URLs
+completas del inspector de ngrok — el token viaja en el query string del GET de
+verificación. No da acceso a nada por sí solo (solo sirve para el handshake de
+registro del webhook), pero conviene rotarlo. Son cuatro pasos:
+
+1. Cambiar el valor en `.env` por uno nuevo.
+2. `configurar_n8n.py`, que lo reescribe dentro del workflow.
+3. Reiniciar n8n.
+4. `configurar_meta.py`, que lo vuelve a registrar en Meta.
+
+Los cuatro pasos, o ninguno: si el token de `.env` y el del workflow importado no
+coinciden, Meta no puede verificar la URL y deja de entregar mensajes.
 
 ## Hallazgo abierto — para CP5
 
