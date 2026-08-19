@@ -5,9 +5,10 @@ y copiar sus valores a `.env`: no existe una Graph API para crear apps. Todo lo
 demás —registrar la URL del webhook, suscribir la app al WABA, verificar que
 quedó— se hace desde acá.
 
-Es idempotente: se puede correr todas las veces que haga falta. Y hace falta
-seguido, porque con ngrok gratis la URL pública cambia en cada reinicio del
-túnel y hay que volver a registrarla.
+Es idempotente: se puede correr todas las veces que haga falta. Cuánto hace
+falta depende del túnel: si la cuenta de ngrok tiene dominio estático la URL
+sobrevive a los reinicios y no hay que volver a registrar nada; si el dominio es
+aleatorio cambia en cada arranque y sí hay que correr esto de nuevo.
 
 Uso:
 
@@ -188,8 +189,22 @@ def verificar(app_id: str, app_secret: str, waba_id: str, token: str) -> bool:
 
 
 def enviar_mensaje(phone_id: str, token: str, destino: str) -> bool:
-    """Manda un mensaje real de prueba. El destino tiene que estar cargado como
-    numero de prueba en el panel de Meta, o Meta lo rechaza."""
+    """Manda un mensaje real de prueba.
+
+    Dos cosas distintas pueden hacer que no llegue, y conviene no confundirlas:
+
+    - `131030 Recipient phone number not in allowed list` — falta cargar el
+      numero como destinatario de prueba en el panel (WhatsApp -> API Setup,
+      desplegable "To"). Es lo unico de todo esto que no tiene Graph API.
+    - `131047 Re-engagement message` — pasaron mas de 24hs desde que esa persona
+      escribio. WhatsApp solo deja mandar texto libre dentro de esa ventana, asi
+      que un mensaje en frio no llega nunca. No hay nada que arreglar: la ventana
+      la abre la persona escribiendo primero.
+
+    Ninguno de los dos aparece en la respuesta del POST. Meta contesta 200 con un
+    `wamid` igual, y recien despues reporta el fallo como evento de estado en el
+    webhook. Que este guion diga "aceptado por Meta" no significa que llego.
+    """
     print(f"\n4. Enviando mensaje de prueba a {destino}")
 
     # El "9" de los numeros argentinos: el formato tiene que coincidir exacto
@@ -285,7 +300,7 @@ def main() -> int:
     if all(pasos):
         print(f"{OK} Meta configurado. La URL del webhook es:")
         print(f"    {callback}")
-        print("\nOjo: si reiniciás ngrok, la URL cambia y hay que correr esto de nuevo.")
+        print("\nSi el dominio de ngrok no es estatico, al reiniciarlo cambia la URL.")
         return 0
 
     print(f"{DIFF} quedaron pasos sin completar, revisa el detalle de arriba")
