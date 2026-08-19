@@ -11,7 +11,7 @@ Referencia de alcance y decisiones de producto: `SPECS.md`. Este documento no re
 | CP1 | Setup + motor de datos | — | **Hecho** |
 | CP2 | Agente Claude (tool use) y ruteo de 4 caminos | CP1 | **Hecho** |
 | CP3 | Endpoint FastAPI + parseo del webhook | CP2 | **Hecho** |
-| CP4 | Orquestación n8n + prueba end-to-end | CP3 | En preparación |
+| CP4 | Orquestación n8n + prueba end-to-end | CP3 | **Hecho** |
 | CP5 | Testing estructural completo | CP4 | Pendiente |
 | CP6 | README de portfolio + cierre | CP5 | Pendiente |
 
@@ -157,8 +157,14 @@ guardado en la Sheet, tool llamada, mensaje fijo de cancelación mostrado) — n
 contra si "se sintió bien" la charla.
 
 **Definition of Done:**
-- Al menos un mensaje real de cada camino (turno nuevo, FAQ, cancelación, repregunta) llega, se procesa y responde correctamente de punta a punta.
-- Un turno creado por este flujo aparece efectivamente en la Sheet.
+- [x] Al menos un mensaje real de cada camino (turno nuevo, FAQ, cancelación, repregunta) llega, se procesa y responde correctamente de punta a punta.
+- [x] Un turno creado por este flujo aparece efectivamente en la Sheet.
+
+**Cerrado.** Los cuatro caminos se probaron con mensajes reales desde un teléfono
+al número de prueba de Meta. Detalle de qué se verificó contra qué, y las tres
+sorpresas que aparecieron (dominio de ngrok estático, El Parador compartiendo la
+instancia de n8n y el puerto 8000, y la ventana de 24hs de WhatsApp): ver
+`ESTADO.md`, sección "CP4 — cómo quedó cerrado".
 
 **Commits esperados:** plantilla del flujo n8n versionada en el repo (con
 placeholders, nunca con el token) · guiones de configuración de n8n y de Meta ·

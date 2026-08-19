@@ -8,18 +8,17 @@ MVP de agendamiento de turnos por WhatsApp con IA, primera de las 4 automatizaci
 
 ## Estado actual
 
-**Fase:** CP3 cerrado — el endpoint expone el agente por HTTP, parsea el payload
-de Meta, filtra los eventos de estado, persiste el turno confirmado y devuelve
-el shape que consume n8n. 127 tests pasando y 7/7 casos del guion verificados
-contra el servidor real, incluida la escritura efectiva en la Sheet. Próximo:
-CP4.
+**Fase:** CP4 cerrado — el MVP funciona de punta a punta por WhatsApp real. Los
+cuatro caminos de SPECS §3 se probaron con mensajes de verdad desde un teléfono
+al número de prueba de Meta, y el turno creado quedó en la Sheet. 127 tests
+pasando. Próximo: CP5.
 
 | CP | Nombre | Estado |
 |---|---|---|
 | CP1 | Setup + motor de datos | **Hecho** |
 | CP2 | Agente Claude (tool use) y ruteo de 4 caminos | **Hecho** |
 | CP3 | Endpoint FastAPI + parseo del webhook | **Hecho** |
-| CP4 | Orquestación n8n + prueba end-to-end | En preparación |
+| CP4 | Orquestación n8n + prueba end-to-end | **Hecho** |
 | CP5 | Testing estructural completo | Pendiente |
 | CP6 | README de portfolio + cierre | Pendiente |
 
@@ -53,7 +52,10 @@ turnos-citas/
 ├── scripts/
 │   ├── verificar_sheets.py   # Verificación manual contra la Sheet real
 │   ├── verificar_agente.py   # Guion de verificación contra la Claude API real
-│   └── verificar_webhook.py  # Guion de verificación contra el servidor real
+│   ├── verificar_webhook.py  # Guion de verificación contra el servidor real
+│   ├── configurar_n8n.py     # Renderiza el flujo desde .env, importa y publica
+│   ├── configurar_meta.py    # Registra el callback y suscribe la app, por Graph API
+│   └── verificar_n8n.py      # El flujo, contra un doble de la Graph API
 ├── tests/
 │   ├── conftest.py           # Fixtures, fechas ancla y cargador de payloads
 │   ├── fixtures/             # Payloads reales de Meta (mensaje, estado, audio, roto)
@@ -65,7 +67,7 @@ turnos-citas/
 │   ├── test_respuestas.py    # Composición del mensaje al paciente
 │   └── test_endpoint.py      # El endpoint de punta a punta, con dobles de red
 ├── n8n/
-│   └── flow.json             # (CP4) Export del flujo de n8n
+│   └── flow.template.json    # El flujo, con placeholders en vez de secretos
 ├── .env.example
 ├── .gitignore
 ├── pytest.ini
@@ -129,10 +131,11 @@ Editor: sin eso, la API devuelve 403 aunque las credenciales sean válidas.
 
 ## Próximo paso
 
-Arrancar CP4: flujo de n8n (Webhook → IF → Respond to Webhook), número de prueba
-de WhatsApp Cloud API y prueba end-to-end. Ver `ROADMAP.md`.
+Arrancar CP5: testing estructural de los bordes de SPECS §7 y §8, empezando por
+el hallazgo abierto del final de este documento, que ya se confirmó en
+producción. Ver `ROADMAP.md`.
 
-Dos cosas que salen de la verificación de CP3 y condicionan CP4:
+## Lo que salió de la verificación de CP3 y condicionó CP4
 
 **El endpoint no envía el mensaje.** Responder 200 al webhook no hace que
 WhatsApp le entregue nada al paciente: el envío es un POST aparte a
@@ -288,6 +291,86 @@ Si algo falla en el paso 6, el orden de sospecha es: `subscribed_apps` primero
 (es invisible y fue lo más caro en El Parador), después si reiniciaste n8n, y
 recién al final la lógica del workflow.
 
+## CP4 — cómo quedó cerrado
+
+El orden de arriba se siguió tal cual y funcionó. Los cuatro caminos de SPECS §3
+se probaron con mensajes reales desde un teléfono al número de prueba, y cada uno
+se verificó contra el dato concreto, no contra el texto:
+
+| Camino | `estado` | Tool | Verificado contra |
+|---|---|---|---|
+| Turno nuevo | `turno_confirmado` | `crear_turno` | fila nueva en la Sheet: `2026-08-20 · 10:00 · limpieza` |
+| FAQ | `consulta_general` | `consulta_general {tema: precios}` | texto idéntico a `respuesta_faq("precios", config)` |
+| Cancelación | `sin_tool` | ninguna | texto idéntico a `mensaje_cancelacion(config)` |
+| Repregunta | `sin_tool` | ninguna | pidió el servicio faltante sin inventar ninguno |
+
+Los dos textos comparables salieron **carácter por carácter** iguales a la
+constante del código. El de cancelación lo redacta el modelo, y aun así respetó
+la plantilla palabra por palabra con el teléfono tomado de `negocio.json`.
+
+**De dónde salió cada dato.** Los textos exactos que se enviaron no se leyeron
+del teléfono: están en la base de n8n (`~/.n8n/database.sqlite`, tablas
+`execution_entity` y `execution_data`), que guarda la salida de cada nodo. El
+formato es `flatted` —un array plano donde los strings numéricos son referencias
+a otras posiciones—, así que hay que rehidratarlo antes de poder leerlo. La
+entrega se confirmó con los eventos de estado que Meta devuelve al propio
+webhook: `sent` y después `delivered`.
+
+**La trampa del "9", confirmada.** Meta respondió `input: 542625634845` a un
+`telefono: 5492625634845`, así que el `.replace()` del nodo de envío hizo lo suyo
+contra la Graph API real, no solo contra el doble.
+
+### Las tres sorpresas de CP4
+
+**El dominio de ngrok es estático, no cambia.** La cuenta gratuita de ngrok da un
+dominio fijo, así que la URL pública sobrevive a los reinicios del túnel. Eso
+contradice lo que decía la nota de `configurar_meta.py` y tiene una consecuencia
+concreta: la app de El Parador tiene registrado su callback **en este mismo
+dominio**, y por eso Meta le postea a `/webhook/restaurante-colo-dia2` por el
+túnel de Turnos. Con el workflow despublicado eso devuelve 404 y Meta reintenta:
+es ruido esperable en el inspector de ngrok, no un error.
+
+**El Parador comparte la instancia de n8n, y eso alcanza para que conteste.** El
+riesgo anotado antes era "no levantes el stack de El Parador". Es más fino que
+eso: su workflow vive en la **misma** instancia de n8n, queda activo con solo
+correr `n8n start`, y su nodo "Llamar a FastAPI" apunta a
+`http://127.0.0.1:8000/webhook` — exactamente el puerto de Turnos. Si los dos
+están publicados, un mensaje al número de prueba hace que El Parador llame al
+FastAPI **de Turnos**, mande la respuesta con sus propias credenciales y encima
+intente un `Append row` en la Sheet del restaurante.
+
+La solución es despublicarlo mientras se trabaja en Turnos:
+
+```powershell
+n8n unpublish:workflow --id=PtRTAyRQc8o19Zg7   # y reiniciar n8n
+n8n publish:workflow --id=PtRTAyRQc8o19Zg7     # para revertirlo
+```
+
+Despublicar tiene la misma trampa que publicar: **no toma efecto hasta reiniciar
+n8n**.
+
+**No se le puede escribir primero al paciente.** WhatsApp solo deja mandar un
+mensaje libre dentro de las 24hs desde que la persona escribió. Fuera de esa
+ventana Meta acepta el POST y devuelve un `wamid` —parece que salió bien— pero
+después reporta `failed` con `131047 Re-engagement message` en el webhook de
+estado. Consecuencia práctica: `configurar_meta.py --enviar` solo sirve si el
+destinatario escribió hace poco, y toda prueba real arranca con un mensaje
+entrante. No es un bug del proyecto y no hay nada que arreglar en el MVP.
+
+Ojo con no confundirlo con `131030 Recipient phone number not in allowed list`,
+que sí significa que falta cargar el número en el panel. En esta cuenta el
+número ya está cargado.
+
+### Cambio en `verificar_n8n.py`
+
+El guion se escribió para correr contra el doble de la Graph API y no servía tal
+cual contra el workflow real: tenía el verify token fijo en `"prueba-local"` y
+los casos de envío esperaban que el POST cayera en el doble. Ahora el token sale
+de `META_VERIFY_TOKEN` y, si el workflow importado apunta a Meta, los cuatro
+casos de envío quedan **omitidos** en vez de fallar — medirían cómo está
+configurado el flujo, no el flujo. Contra el workflow real da `2/2 (4 omitidos)`;
+contra el doble sigue dando 6/6.
+
 ## Hallazgo abierto — para CP5
 
 **En el camino de repregunta, el modelo afirma disponibilidad que no verificó.**
@@ -304,6 +387,17 @@ No es un fallo del endpoint —el ruteo y el `estado` son correctos— sino del
 texto que redacta el modelo. Se corrige en el prompt de sistema: al repreguntar,
 no afirmar disponibilidad ni dar por tomado el turno. Queda para CP5, que es
 donde viven los fixes que salen de los casos de borde.
+
+**Confirmado en producción durante CP4.** Con un mensaje real por WhatsApp
+(`quiero un turno el jueves a las 11`) el bot contestó:
+
+> "¡Hola! Para el jueves 20 a las 11 tengo lugar 🙂 ¿Qué necesitás: control,
+> limpieza dental o extracción?"
+
+`estado: sin_tool`, ninguna tool llamada. Lo que agrega esta corrida: **esa vez
+la afirmación era cierta** —las 11 estaban libres— y aun así el modelo no tenía
+cómo saberlo. Que acierte por casualidad es lo que hace que el bug pase
+desapercibido hasta que el horario esté ocupado.
 
 ## Documentos relacionados
 
