@@ -35,6 +35,11 @@ El verify token sale de `META_VERIFY_TOKEN` —del entorno si esta exportada, y
 si no del `.env`— porque tiene que ser el mismo que quedo dentro del workflow
 importado.
 
+Si el workflow importado apunta a la Graph API **real** en vez de al doble, los
+cuatro casos que miden el envio quedan **omitidos**, no fallados: el POST se
+iria a Meta y el doble no veria nada, asi que medirian como esta configurado el
+flujo y no el flujo en si. Los dos casos de verificacion (GET) se corren igual.
+
 La verificación es estructural: se compara contra las constantes importadas del
 propio código y contra los datos del `config/negocio.json`, nunca contra si el
 texto "suena bien".
@@ -70,12 +75,19 @@ DIFF = "[DIFF]"
 
 URL_N8N = "http://127.0.0.1:5678/webhook/turnos-citas"
 PUERTO_DOBLE = 8099
+
 # El mismo string que quedo importado en el workflow. Cuando se corre contra el
 # doble se exporta a mano; con el .env real sale de ahi. Hardcodearlo hacia que
 # el primer caso fallara por el token y no por el flujo, que es lo que se mide.
 VERIFY_TOKEN = os.getenv("META_VERIFY_TOKEN") or "prueba-local"
 
 RUTA_FIXTURES = RAIZ / "tests" / "fixtures"
+
+# El workflow ya renderizado que `configurar_n8n.py` importo, y el nodo dentro
+# de el que hace el POST a la Graph API.
+RENDERIZADO = RAIZ / "n8n" / "flow.local.json"
+NODO_ENVIO = "Responder por WhatsApp"
+URL_DOBLE = f"http://127.0.0.1:{PUERTO_DOBLE}"
 
 # El `from` de los fixtures y cómo tiene que quedar después de que el workflow
 # le saque el "9" — el formato que Meta acepta para números argentinos.
@@ -172,6 +184,30 @@ def esperar_webhook(segundos: float = 60.0) -> bool:
             pass
         time.sleep(1.0)
     return False
+
+
+# ── Contra que Graph API quedo importado el workflow ──────────────────────
+
+
+def workflow_apunta_al_doble() -> bool | None:
+    """True si el workflow importado postea al doble local, False si a Meta.
+
+    Los casos que verifican el envio solo tienen sentido contra el doble: si el
+    workflow apunta a la Graph API real, el POST se va a Meta y el doble no ve
+    nada, asi que el caso fallaria por como esta configurado el flujo y no
+    porque el flujo este mal. None si no se puede saber.
+    """
+    if not RENDERIZADO.exists():
+        return None
+    try:
+        nodos = json.loads(RENDERIZADO.read_text(encoding="utf-8"))["nodes"]
+    except (json.JSONDecodeError, KeyError):
+        return None
+
+    for nodo in nodos:
+        if nodo.get("name") == NODO_ENVIO:
+            return nodo.get("parameters", {}).get("url", "").startswith(URL_DOBLE)
+    return None
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────
@@ -298,31 +334,37 @@ def caso_con_envio(
     return todo_bien
 
 
-def construir_casos(doble: DobleGraphAPI) -> list[tuple[str, Any]]:
+def construir_casos(doble: DobleGraphAPI) -> list[tuple[str, Any, bool]]:
+    """Los casos, cada uno con si depende de que el envio caiga en el doble."""
     config = cargar_config()
 
     return [
         (
             "Verificacion de Meta (GET) con el token correcto",
             caso_verificacion_ok,
+            False,
         ),
         (
             "Verificacion de Meta (GET) con un token invalido",
             caso_verificacion_rechazada,
+            False,
         ),
         (
             "Evento de estado (entregado) - no debe salir ningun envio",
             lambda: caso_sin_envio(doble, fixture("whatsapp_evento_estado")),
+            True,
         ),
         (
             "Payload malformado - no debe salir ningun envio",
             lambda: caso_sin_envio(doble, fixture("whatsapp_payload_malformado")),
+            True,
         ),
         (
             "Mensaje de audio - respuesta fija, sin llamar a Claude",
             lambda: caso_con_envio(
                 doble, fixture("whatsapp_mensaje_audio"), MENSAJE_TIPO_NO_SOPORTADO, 30.0
             ),
+            True,
         ),
         (
             "FAQ de precios - circuito completo con Claude real",
@@ -331,6 +373,7 @@ def construir_casos(doble: DobleGraphAPI) -> list[tuple[str, Any]]:
                 fixture_con_texto("hola, cuanto sale una limpieza?"),
                 respuesta_faq("precios", config),
             ),
+            True,
         ),
     ]
 
@@ -366,6 +409,14 @@ def main() -> int:
     doble.arrancar()
     print(f"Doble de la Graph API escuchando en 127.0.0.1:{PUERTO_DOBLE}")
 
+    contra_doble = workflow_apunta_al_doble()
+    if contra_doble is False:
+        print(f"{chr(10)}{DIFF} el workflow importado postea a la Graph API real,"
+              " no al doble")
+        print("    los casos que miden el envio quedan omitidos: el POST se iria")
+        print("    a Meta y el doble no veria nada. Para correrlos, reimporta con")
+        print("    GRAPH_API_BASE apuntando al doble (ver la cabecera del guion).")
+
     try:
         casos = construir_casos(doble)
 
@@ -375,11 +426,16 @@ def main() -> int:
                 return 2
             seleccion = [(args.caso, *casos[args.caso - 1])]
         else:
-            seleccion = [(i, t, f) for i, (t, f) in enumerate(casos, start=1)]
+            seleccion = [(i, t, f, d) for i, (t, f, d) in enumerate(casos, start=1)]
 
         resultados = []
-        for numero, titulo, correr in seleccion:
+        omitidos = 0
+        for numero, titulo, correr, necesita_doble in seleccion:
             print(f"\n{numero}. {titulo}")
+            if necesita_doble and contra_doble is False:
+                print("  (omitido: el workflow apunta a la Graph API real)")
+                omitidos += 1
+                continue
             try:
                 resultados.append(correr())
             except httpx.ConnectError:
@@ -391,7 +447,10 @@ def main() -> int:
                 resultados.append(False)
 
         print("\n" + "=" * 70)
-        print(f"{sum(resultados)}/{len(resultados)} casos como se esperaba")
+        resumen = f"{sum(resultados)}/{len(resultados)} casos como se esperaba"
+        if omitidos:
+            resumen += f"  ({omitidos} omitidos)"
+        print(resumen)
         return 0 if all(resultados) else 1
     finally:
         doble.parar()
