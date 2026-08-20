@@ -195,8 +195,8 @@ guion de verificación del flujo · notas de troubleshooting si aparecen
 **Commits esperados:** guion de testing de bordes · fixes que salgan de los casos encontrados (cada uno en su propio commit, no agrupados).
 
 **Cerrado.** `scripts/verificar_agente.py` pasó de 12 a 15 casos y dio **15/15**
-contra la Claude API real. 148 tests en `pytest`. No hizo falta levantar el
-stack: el checkpoint es casi todo de nivel agente.
+contra la Claude API real; `scripts/verificar_n8n.py` pasó de 6 a 7 y dio **7/7**
+contra el flujo real, sin Meta. 148 tests en `pytest`.
 
 Lo que costó de verdad no fue el fix del hallazgo sino **cómo verificarlo**: era
 un bug de texto, y este proyecto no verifica si una respuesta "suena bien". Se
