@@ -21,7 +21,7 @@ sola de su API local, no hay que copiarla a mano.
 
 Nunca imprime tokens ni secretos.
 
-**El paso 2 es el que más caro salió en El Parador.** El enlace `subscribed_apps`
+**El paso 2 es el que más caro salió en el proyecto anterior.** El enlace `subscribed_apps`
 entre el WABA y la app no aparece en ninguna pantalla del panel de Meta y sin él
 no llega ningún mensaje, sin ningún error visible que lo explique.
 """

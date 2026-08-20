@@ -41,3 +41,6 @@ __pycache__/
 Thumbs.db
 desktop.ini
 .DS_Store
+
+# Notas operativas con datos de otros proyectos de la agencia
+NOTAS-LOCALES.md

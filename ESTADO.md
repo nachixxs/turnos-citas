@@ -1,6 +1,12 @@
-# ESTADO interno — Turnos / Citas (Portfolio Accelerate.ai)
+# ESTADO — Turnos / Citas (Portfolio Accelerate.ai)
 
-**Este documento es de uso interno del equipo** (estado del proyecto). Distinto del README público del repo, que se genera recién en CP6 y está orientado a portfolio (ver `metodologia-general-accelerate-ai.md`, sección "README público de cada repo").
+Bitácora de construcción del proyecto: qué se decidió, qué salió mal y qué se
+descubrió tarde en cada checkpoint. El `README.md` cuenta qué es el proyecto y
+por qué; este documento cuenta cómo se llegó hasta ahí, sin limar las partes
+feas.
+
+Los datos operativos de otros proyectos de la agencia no viven acá: están en un
+archivo local que no se versiona.
 
 ## Qué es esto
 
@@ -133,10 +139,10 @@ Editor: sin eso, la API devuelve 403 aunque las credenciales sean válidas.
 El orden importa y cada paso depende del anterior. En terminales aparte:
 
 ```powershell
-# 0. Sacar a El Parador del medio. Comparte esta instancia de n8n y el
+# 0. Sacar del medio al otro workflow de la agencia. Comparte esta instancia de n8n y el
 #    puerto 8000: si queda publicado, contesta el mismo mensaje y escribe
-#    en la Sheet del restaurante. No toma efecto hasta reiniciar n8n.
-n8n unpublish:workflow --id=PtRTAyRQc8o19Zg7
+#    en la planilla de ese otro proyecto. No toma efecto hasta reiniciar n8n.
+n8n unpublish:workflow --id=<ID_DEL_OTRO_WORKFLOW>
 
 # 1. El tunel. La URL publica la leen los guiones solos de 127.0.0.1:4040.
 ngrok http 5678
@@ -177,8 +183,8 @@ fuera del repo:
   CP5 son lección genuina y no viven bien en un README de portfolio: por qué una
   blocklist de frases no verifica una propiedad semántica, y el patrón general
   de "si el texto no puede variar, verificarlo es trivial".
-- **Republicar El Parador** cuando se vuelva a ese proyecto:
-  `n8n publish:workflow --id=PtRTAyRQc8o19Zg7` y reiniciar n8n.
+- **Republicar el otro workflow** cuando se vuelva a ese proyecto:
+  `n8n publish:workflow --id=<ID_DEL_OTRO_WORKFLOW>` y reiniciar n8n.
 
 Si el MVP se muestra a un lead o se vende a un cliente real, lo primero de la
 lista de SPECS §11 en volverse obligatorio es la verificación de la firma del
@@ -270,7 +276,7 @@ Webhook POST → Filtrar eventos de estado
                  └─ statuses     → Ignorar evento de estado
 ```
 
-**Las trampas de El Parador, ya resueltas de entrada** (cada una anotada en el
+**Las trampas que ya habían aparecido en el proyecto anterior, resueltas de entrada** (cada una anotada en el
 campo `notes` del nodo correspondiente):
 
 | Trampa | Cómo quedó resuelta |
@@ -296,7 +302,7 @@ cosa, no cuánto vale.
 
 | Qué | Estado |
 |---|---|
-| App de Meta | creada, **nueva**, separada de la de El Parador |
+| App de Meta | creada, **nueva**, separada de la del proyecto anterior |
 | Token | **de usuario de sistema, permanente** — no vence, no hay que renovarlo |
 | Permisos del token | `whatsapp_business_management`, `whatsapp_business_messaging` |
 | Acceso del token al WABA | confirmado (lee `subscribed_apps` sin 403) |
@@ -306,19 +312,18 @@ cosa, no cuánto vale.
 
 **El WABA de prueba es compartido, y no hay forma de que no lo sea.** Meta da un
 solo "Test WhatsApp Business Account" por cuenta de desarrollador, así que el
-mismo WABA que usa Turnos ya tiene suscrita la app de El Parador
-(`Accelerate Restaurant Bot`). Eso está bien y no rompe nada: la **URL del
+mismo WABA que usa Turnos ya tiene suscrita la app del proyecto anterior
+(la del otro proyecto). Eso está bien y no rompe nada: la **URL del
 webhook se configura por app**, y como la app de Turnos es nueva, tiene la suya
-propia y la de El Parador queda intacta.
+propia y la del otro queda intacta.
 
 La consecuencia práctica sí importa: **los dos bots reciben los mensajes de ese
-número**. Mientras se trabaje en Turnos, no levantar el stack de El Parador, o
+número**. Mientras se trabaje en Turnos, no levantar el stack del otro proyecto, o
 los dos van a contestar el mismo mensaje.
 
 **Por qué un token de sistema y no el temporal.** El temporal del panel dura
 24hs, y cuando vence el síntoma es que todo funcionaba y de golpe los envíos
-fallan con un error de permisos que no apunta al token — el bug que en El Parador
-apareció una y otra vez. El de sistema se crea en business.facebook.com →
+fallan con un error de permisos que no apunta al token — el bug que en el proyecto anterior apareció una y otra vez. El de sistema se crea en business.facebook.com →
 Business settings → Users → System users, y hay que darle acceso a **dos**
 activos, no uno: la app y la WhatsApp Account. Si falta el segundo, el token se
 genera igual pero después tira 403 al tocar el WABA.
@@ -337,7 +342,7 @@ Lo único manual es el paso 1: no existe Graph API para crear apps.
 6. Conversación real por WhatsApp, un mensaje por cada camino de SPECS §3.
 
 Si algo falla en el paso 6, el orden de sospecha es: `subscribed_apps` primero
-(es invisible y fue lo más caro en El Parador), después si reiniciaste n8n, y
+(es invisible y fue lo más caro en el proyecto anterior), después si reiniciaste n8n, y
 recién al final la lógica del workflow.
 
 ## CP4 — cómo quedó cerrado
@@ -374,25 +379,25 @@ contra la Graph API real, no solo contra el doble.
 **El dominio de ngrok es estático, no cambia.** La cuenta gratuita de ngrok da un
 dominio fijo, así que la URL pública sobrevive a los reinicios del túnel. Eso
 contradice lo que decía la nota de `configurar_meta.py` y tiene una consecuencia
-concreta: la app de El Parador tiene registrado su callback **en este mismo
-dominio**, y por eso Meta le postea a `/webhook/restaurante-colo-dia2` por el
+concreta: la app del otro proyecto tiene registrado su callback **en este mismo
+dominio**, y por eso Meta le postea a la ruta de su propio webhook por el
 túnel de Turnos. Con el workflow despublicado eso devuelve 404 y Meta reintenta:
 es ruido esperable en el inspector de ngrok, no un error.
 
-**El Parador comparte la instancia de n8n, y eso alcanza para que conteste.** El
-riesgo anotado antes era "no levantes el stack de El Parador". Es más fino que
+**El otro proyecto comparte la instancia de n8n, y eso alcanza para que conteste.** El
+riesgo anotado antes era "no levantes el stack del otro proyecto". Es más fino que
 eso: su workflow vive en la **misma** instancia de n8n, queda activo con solo
 correr `n8n start`, y su nodo "Llamar a FastAPI" apunta a
 `http://127.0.0.1:8000/webhook` — exactamente el puerto de Turnos. Si los dos
-están publicados, un mensaje al número de prueba hace que El Parador llame al
+están publicados, un mensaje al número de prueba hace que el otro llame al
 FastAPI **de Turnos**, mande la respuesta con sus propias credenciales y encima
-intente un `Append row` en la Sheet del restaurante.
+intente un `Append row` en la planilla de ese otro proyecto.
 
 La solución es despublicarlo mientras se trabaja en Turnos:
 
 ```powershell
-n8n unpublish:workflow --id=PtRTAyRQc8o19Zg7   # y reiniciar n8n
-n8n publish:workflow --id=PtRTAyRQc8o19Zg7     # para revertirlo
+n8n unpublish:workflow --id=<ID_DEL_OTRO_WORKFLOW>   # y reiniciar n8n
+n8n publish:workflow --id=<ID_DEL_OTRO_WORKFLOW>     # para revertirlo
 ```
 
 Despublicar tiene la misma trampa que publicar: **no toma efecto hasta reiniciar
@@ -450,7 +455,7 @@ por prolijidad y no por riesgo.
 |---|---|---|
 | ngrok, uvicorn, n8n | frenados | levantarlos con los 6 pasos de "Levantar el stack completo" |
 | Workflow de Turnos | importado desde el `.env` real y publicado | nada |
-| Workflow de El Parador | **despublicado** | `n8n publish:workflow --id=PtRTAyRQc8o19Zg7` y reiniciar n8n, cuando se vuelva a ese proyecto |
+| Workflow del otro proyecto | **despublicado** | `n8n publish:workflow --id=<ID_DEL_OTRO_WORKFLOW>` y reiniciar n8n, cuando se vuelva a ese proyecto (el id está en las notas locales) |
 | Callback en Meta | registrado, campo `messages`, app suscrita al WABA | nada mientras el dominio de ngrok no cambie |
 | Turno de prueba en la Sheet | `2026-08-20 · 10:00 · limpieza` | **dejarlo**: es la evidencia del DoD de CP4 y sirve de slot ocupado para CP5 |
 
@@ -670,7 +675,7 @@ cerrarlo.
 | uvicorn, n8n | **frenados**, puertos 8000 / 5678 / 8099 libres | levantarlos con los 6 pasos de "Levantar el stack completo" |
 | ngrok | nunca se levantó en CP5 | — |
 | Workflow de Turnos | **reimportado desde el `.env` real** y publicado, después de la verificación | reiniciar n8n antes de usarlo |
-| Workflow de El Parador | **despublicado** (se volvió a correr el paso 0, es idempotente) | `n8n publish:workflow --id=PtRTAyRQc8o19Zg7` y reiniciar n8n, cuando se vuelva a ese proyecto |
+| Workflow del otro proyecto | **despublicado** (se volvió a correr el paso 0, es idempotente) | `n8n publish:workflow --id=<ID_DEL_OTRO_WORKFLOW>` y reiniciar n8n, cuando se vuelva a ese proyecto (el id está en las notas locales) |
 | Callback en Meta | intacto, no se tocó | nada |
 | Sheet | **no se escribió nada en CP5** | nada |
 

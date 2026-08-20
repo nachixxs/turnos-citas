@@ -162,7 +162,7 @@ contra si "se sintió bien" la charla.
 
 **Cerrado.** Los cuatro caminos se probaron con mensajes reales desde un teléfono
 al número de prueba de Meta. Detalle de qué se verificó contra qué, y las tres
-sorpresas que aparecieron (dominio de ngrok estático, El Parador compartiendo la
+sorpresas que aparecieron (dominio de ngrok estático, otro proyecto compartiendo la
 instancia de n8n y el puerto 8000, y la ventana de 24hs de WhatsApp): ver
 `ESTADO.md`, sección "CP4 — cómo quedó cerrado".
 
