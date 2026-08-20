@@ -444,19 +444,26 @@ por prolijidad y no por riesgo.
 | Callback en Meta | registrado, campo `messages`, app suscrita al WABA | nada mientras el dominio de ngrok no cambie |
 | Turno de prueba en la Sheet | `2026-08-20 · 10:00 · limpieza` | **dejarlo**: es la evidencia del DoD de CP4 y sirve de slot ocupado para CP5 |
 
-**Pendiente manual: rotar `META_VERIFY_TOKEN`.** Durante CP4 el token quedó
+**`META_VERIFY_TOKEN` rotado el 2026-08-19.** Durante CP4 el token quedó
 expuesto en el historial de una sesión de Claude Code, al imprimir las URLs
 completas del inspector de ngrok — el token viaja en el query string del GET de
-verificación. Es prolijidad, no urgencia: ver la sección de la firma más arriba
-para por qué este token no es la puerta de entrada. Son cuatro pasos:
+verificación. Era prolijidad y no urgencia (ver la sección de la firma más
+arriba: este token no es la puerta de entrada), pero ya está hecho. Verificado
+después de rotarlo: el token nuevo devuelve el `hub.challenge` con 200 y el
+viejo da 403.
+
+**Cómo rotarlo, si vuelve a hacer falta.** Son cuatro pasos, y van los cuatro o
+ninguno: si el valor de `.env` y el que quedó dentro del workflow no coinciden,
+Meta no puede verificar la URL y deja de entregar mensajes.
 
 1. Cambiar el valor en `.env` por uno nuevo.
 2. `configurar_n8n.py`, que lo reescribe dentro del workflow.
 3. Reiniciar n8n.
 4. `configurar_meta.py`, que lo vuelve a registrar en Meta.
 
-Los cuatro pasos, o ninguno: si el token de `.env` y el del workflow importado no
-coinciden, Meta no puede verificar la URL y deja de entregar mensajes.
+Que el paso 4 diga "registrada" ya es la prueba de que el token nuevo funciona:
+para registrar el callback, Meta le pega al webhook con ese token y espera el
+challenge de vuelta. Si el workflow tuviera el viejo, ese paso fallaría.
 
 ## Hallazgo abierto — para CP5
 
