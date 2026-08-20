@@ -134,6 +134,11 @@ Editor: sin eso, la API devuelve 403 aunque las credenciales sean válidas.
 El orden importa y cada paso depende del anterior. En terminales aparte:
 
 ```powershell
+# 0. Sacar a El Parador del medio. Comparte esta instancia de n8n y el
+#    puerto 8000: si queda publicado, contesta el mismo mensaje y escribe
+#    en la Sheet del restaurante. No toma efecto hasta reiniciar n8n.
+n8n unpublish:workflow --id=PtRTAyRQc8o19Zg7
+
 # 1. El tunel. La URL publica la leen los guiones solos de 127.0.0.1:4040.
 ngrok http 5678
 
@@ -158,8 +163,10 @@ acepta conexiones antes de que la URL responda, y en el medio da 404 aunque el
 workflow figure publicado. `verificar_n8n.py` ya sondea hasta que deja de dar
 404.
 
-**Antes de probar, despublicar El Parador** (ver "las tres sorpresas de CP4"):
-comparte esta instancia de n8n y el puerto 8000.
+El paso 0 no es opcional y no hay nada en el código que lo garantice: se
+decidió a propósito no cambiar el puerto de Turnos para no tocar el repo por un
+problema de convivencia entre proyectos, así que **depende de acordarse**. El
+detalle de qué pasa si se olvida está en "las tres sorpresas de CP4".
 
 ## Próximo paso
 
@@ -403,6 +410,30 @@ casos de envío quedan **omitidos** en vez de fallar — medirían cómo está
 configurado el flujo, no el flujo. Contra el workflow real da `2/2 (4 omitidos)`;
 contra el doble sigue dando 6/6.
 
+### El webhook no verifica la firma de Meta
+
+Apareció al revisar los pendientes de CP4. Meta firma cada payload con
+`X-Hub-Signature-256` usando el app secret, y no se comprueba en ningún lado: ni
+en el workflow de n8n ni en FastAPI. El endpoint procesa cualquier POST que
+llegue a la URL pública.
+
+**La evidencia es del propio CP4.** La "corrida en seco" que se hizo antes de la
+prueba real fue exactamente eso: un payload fabricado a mano, posteado al webhook
+público, que recorrió la cadena entera —Claude, lectura de la Sheet y un POST
+real a la Graph API— sin ninguna credencial. No hizo falta ningún exploit, es el
+comportamiento normal del endpoint.
+
+**Se declara fuera de alcance, no se arregla** (SPECS §10). El número es de
+prueba, la URL es un túnel que se levanta a mano para demostrar y no hay datos de
+terceros en juego. Lo que cambia es que pasa a ser una omisión explicada en vez
+de un olvido, y entra al README de CP6 como limitación conocida.
+
+Esto también reordena la prioridad del `META_VERIFY_TOKEN` de más abajo: ese
+token solo gobierna el handshake de registro del GET, así que quien lo tenga
+puede a lo sumo hacer que el webhook devuelva el `hub.challenge`. La puerta de
+entrada real es que el POST no pide nada. Rotarlo sigue siendo lo correcto, pero
+por prolijidad y no por riesgo.
+
 ### En qué estado quedó la máquina al cerrar CP4
 
 | Cosa | Cómo quedó | Qué hacer |
@@ -416,8 +447,8 @@ contra el doble sigue dando 6/6.
 **Pendiente manual: rotar `META_VERIFY_TOKEN`.** Durante CP4 el token quedó
 expuesto en el historial de una sesión de Claude Code, al imprimir las URLs
 completas del inspector de ngrok — el token viaja en el query string del GET de
-verificación. No da acceso a nada por sí solo (solo sirve para el handshake de
-registro del webhook), pero conviene rotarlo. Son cuatro pasos:
+verificación. Es prolijidad, no urgencia: ver la sección de la firma más arriba
+para por qué este token no es la puerta de entrada. Son cuatro pasos:
 
 1. Cambiar el valor en `.env` por uno nuevo.
 2. `configurar_n8n.py`, que lo reescribe dentro del workflow.
