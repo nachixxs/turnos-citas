@@ -559,9 +559,9 @@ faltaba para que el caso valga algo.
 
 ## CP5 — cómo quedó cerrado
 
-Casi todo el checkpoint es de nivel agente: **no hizo falta levantar el stack**.
-Ni ngrok, ni n8n, ni Meta, ni tocar la Sheet real. `pytest` y
-`verificar_agente.py` alcanzaron.
+Casi todo el checkpoint es de nivel agente: `pytest` y `verificar_agente.py`
+alcanzaron para el fix. Al final sí se levantó el stack, pero **sin ngrok y sin
+Meta**, para cerrar el único cabo suelto que dejaba el estado nuevo (ver abajo).
 
 **La corrida real: 15/15.** El guion pasó de 12 a 15 casos y todos coincidieron
 con lo esperado en la primera corrida después del fix.
@@ -588,6 +588,36 @@ específica": **la plantilla no tiene una sola cifra**, así que no puede ofrece
 un horario, un precio ni una fecha. La única cifra del mensaje final es el
 teléfono, que entra por el config. Contra la API real el modelo la reprodujo
 palabra por palabra, igual que había hecho con la de cancelación en CP4.
+
+### El estado nuevo, verificado también por n8n
+
+`dato_faltante` no existía cuando se armó el workflow, así que había que
+comprobar que el flujo lo rutea bien. **No hizo falta tocar nada:** el nodo
+`Hay algo para responder` rutea por `respuesta` no vacía y no por `estado`, y
+una repregunta siempre trae respuesta.
+
+Pero eso era una deducción de leer el JSON del workflow, no una verificación, y
+la diferencia importa. Se agregó un séptimo caso a `verificar_n8n.py` y se corrió
+el circuito real —n8n → FastAPI → Claude → Sheets → envío— con el doble local en
+lugar de la Graph API. **7/7.** Lo que salió hacia el envío:
+
+```
+7. Repregunta - el texto que sale no nombra el horario pedido
+   to   : 542615550199
+   texto: ¿Qué necesitás: Control, Limpieza dental o Extracción?
+   [OK]
+```
+
+Idéntico a lo que compone `respuestas.py`. El mensaje de entrada pedía "un turno
+para el jueves a las 11" y lo que salió no nombra ni el día ni la hora: el
+hallazgo, cerrado de punta a punta y no solo a nivel agente.
+
+**Una trampa al correrlo, que no es del flujo.** `verificar_n8n.py` toma el
+verify token de `META_VERIFY_TOKEN` —del entorno si está exportada, del `.env` si
+no—, y tiene que ser el mismo que quedó dentro del workflow importado. Si se
+importa con `META_VERIFY_TOKEN="prueba-local"` y después se corre el guion sin
+exportarla, el caso 1 da 403 y parece un fallo del workflow. No lo es: hay que
+exportar la misma variable en las dos terminales.
 
 ### Dos cosas que aparecieron y no se tocaron
 
@@ -620,6 +650,23 @@ ninguno de los 4 caminos de SPECS §3, así que no tiene un texto especificado, 
 el riesgo que sí importaba —que sustituya el servicio y agende otra cosa— está
 cubierto y verificado. Vale tenerlo anotado por si en un cliente real hace falta
 cerrarlo.
+
+### En qué estado quedó la máquina al cerrar CP5
+
+| Cosa | Cómo quedó | Qué hacer |
+|---|---|---|
+| uvicorn, n8n | **frenados**, puertos 8000 / 5678 / 8099 libres | levantarlos con los 6 pasos de "Levantar el stack completo" |
+| ngrok | nunca se levantó en CP5 | — |
+| Workflow de Turnos | **reimportado desde el `.env` real** y publicado, después de la verificación | reiniciar n8n antes de usarlo |
+| Workflow de El Parador | **despublicado** (se volvió a correr el paso 0, es idempotente) | `n8n publish:workflow --id=PtRTAyRQc8o19Zg7` y reiniciar n8n, cuando se vuelva a ese proyecto |
+| Callback en Meta | intacto, no se tocó | nada |
+| Sheet | **no se escribió nada en CP5** | nada |
+
+Durante la verificación el workflow estuvo importado apuntando al doble local,
+con token y `phone_id` de mentira. Eso se revirtió corriendo `configurar_n8n.py`
+con el `.env` real, y está confirmado: `n8n/flow.local.json` ya no contiene
+`127.0.0.1:8099`. **Igual hace falta reiniciar n8n** para que el workflow
+repuesto tome efecto — publicar no basta.
 
 ## Documentos relacionados
 
