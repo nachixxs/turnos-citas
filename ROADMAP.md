@@ -13,7 +13,7 @@ Referencia de alcance y decisiones de producto: `SPECS.md`. Este documento no re
 | CP3 | Endpoint FastAPI + parseo del webhook | CP2 | **Hecho** |
 | CP4 | Orquestación n8n + prueba end-to-end | CP3 | **Hecho** |
 | CP5 | Testing estructural completo | CP4 | **Hecho** |
-| CP6 | README de portfolio + cierre | CP5 | Pendiente |
+| CP6 | README de portfolio + cierre | CP5 | **Hecho** |
 
 Fecha objetivo total: **martes 18 de agosto de 2026** (SPECS §14).
 
@@ -226,10 +226,16 @@ modelo improvisa justo donde no conviene.
 **Testing estructural:** no aplica testing de código — el DoD es una checklist de entregables, verificada ítem por ítem.
 
 **Definition of Done (checklist de SPECS §13):**
-- [ ] Repo funcional con el código del MVP.
-- [ ] README público orientado a portfolio, con la decisión de SPECS §8 explicada.
-- [ ] Datos de ejemplo del negocio ficticio (Consultorio Odontológico Dr. Franco Aguilar) completos.
-- [ ] Guiones de testing estructural documentados (de CP5) presentes en el repo.
+- [x] Repo funcional con el código del MVP. — 148 tests, los cuatro caminos probados por WhatsApp real en CP4.
+- [x] README público orientado a portfolio, con la decisión de SPECS §8 explicada. — y también el hallazgo de CP5, al mismo nivel.
+- [x] Datos de ejemplo del negocio ficticio (Consultorio Odontológico Dr. Franco Aguilar) completos. — verificados campo por campo contra SPECS §4.
+- [x] Guiones de testing estructural documentados (de CP5) presentes en el repo. — `verificar_agente.py` 15/15, `verificar_n8n.py` 7/7, `verificar_sheets.py`, `verificar_webhook.py`.
+
+**Cerrado.** El MVP está completo. Los cuatro entregables de SPECS §13 están
+verificados, no solo declarados: la consistencia de los datos de ejemplo se
+comprobó campo por campo contra SPECS §4, y las afirmaciones del README
+(cantidad de tests, archivos citados, tools nombradas, snippets de código) se
+chequearon contra el repo real en vez de escribirse de memoria.
 
 **Commits esperados:** README público · ajustes finales de datos de ejemplo si hace falta.
 
