@@ -12,7 +12,7 @@ Referencia de alcance y decisiones de producto: `SPECS.md`. Este documento no re
 | CP2 | Agente Claude (tool use) y ruteo de 4 caminos | CP1 | **Hecho** |
 | CP3 | Endpoint FastAPI + parseo del webhook | CP2 | **Hecho** |
 | CP4 | Orquestación n8n + prueba end-to-end | CP3 | **Hecho** |
-| CP5 | Testing estructural completo | CP4 | Pendiente |
+| CP5 | Testing estructural completo | CP4 | **Hecho** |
 | CP6 | README de portfolio + cierre | CP5 | Pendiente |
 
 Fecha objetivo total: **martes 18 de agosto de 2026** (SPECS §14).
@@ -184,15 +184,32 @@ guion de verificación del flujo · notas de troubleshooting si aparecen
 - Consulta sobre obra social (respuesta: solo atención particular).
 - Consulta de precios y horarios (FAQ básico).
 - Intento de resolver una urgencia → confirmar que no se ofrece como opción ni se responde con info específica (fuera de alcance, SPECS §7).
-- Repregunta que afirma disponibilidad sin verificarla → en el camino de repregunta no se llama a ninguna tool y la Sheet nunca se lee, así que el modelo no puede saber si el horario está libre. Detectado en el guion de CP3 (ver `ESTADO.md`, "Hallazgo abierto"); se corrige en el prompt de sistema.
+- Repregunta que afirma disponibilidad sin verificarla → en el camino de repregunta no se llama a ninguna tool y la Sheet nunca se lee, así que el modelo no puede saber si el horario está libre. Detectado en el guion de CP3 y reproducido en producción en CP4; corregido acá, ver "Cerrado" más abajo.
 
 **Testing estructural:** cada caso se verifica contra el dato real esperado (id de servicio devuelto, slot ofrecido, tool llamada o no llamada), documentado en el propio guion de testing — no evaluación subjetiva de la respuesta en texto.
 
 **Definition of Done:**
-- Todos los casos de la lista están documentados en un guion de testing con input, comportamiento esperado y resultado real obtenido.
-- Ningún caso queda marcado como "parece que anda bien" sin verificación contra un dato concreto.
+- [x] Todos los casos de la lista están documentados en un guion de testing con input, comportamiento esperado y resultado real obtenido.
+- [x] Ningún caso queda marcado como "parece que anda bien" sin verificación contra un dato concreto.
 
 **Commits esperados:** guion de testing de bordes · fixes que salgan de los casos encontrados (cada uno en su propio commit, no agrupados).
+
+**Cerrado.** `scripts/verificar_agente.py` pasó de 12 a 15 casos y dio **15/15**
+contra la Claude API real. 148 tests en `pytest`. No hizo falta levantar el
+stack: el checkpoint es casi todo de nivel agente.
+
+Lo que costó de verdad no fue el fix del hallazgo sino **cómo verificarlo**: era
+un bug de texto, y este proyecto no verifica si una respuesta "suena bien". Se
+resolvió sacándole el texto libre al camino de repregunta —ahora es la tool
+`pedir_dato_faltante` y el texto lo compone `respuestas.py` sin recibir la fecha
+ni la hora pedidas—, con lo que el caso se verifica igual que los otros 14: qué
+tool se llamó y con qué argumentos. El razonamiento completo, la corrida real y
+las dos cosas que aparecieron y no se tocaron están en `ESTADO.md`, sección
+"El hallazgo de CP4, y cómo se cerró en CP5" y "CP5 — cómo quedó cerrado".
+
+Además, las urgencias pasaron a tener texto fijo derivando al teléfono del
+consultorio: SPECS §7 dice qué no hacer pero no qué hacer, y sin una regla el
+modelo improvisa justo donde no conviene.
 
 ---
 
