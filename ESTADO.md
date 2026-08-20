@@ -8,10 +8,9 @@ MVP de agendamiento de turnos por WhatsApp con IA, primera de las 4 automatizaci
 
 ## Estado actual
 
-**Fase:** CP4 cerrado — el MVP funciona de punta a punta por WhatsApp real. Los
-cuatro caminos de SPECS §3 se probaron con mensajes de verdad desde un teléfono
-al número de prueba de Meta, y el turno creado quedó en la Sheet. 127 tests
-pasando. Próximo: CP5.
+**Fase:** CP5 cerrado — los bordes de SPECS §7 y §8 están cubiertos y el
+hallazgo abierto de CP4 quedó corregido y verificado contra la API real. El
+guion del agente da 15/15 y hay 148 tests pasando. Próximo: CP6.
 
 | CP | Nombre | Estado |
 |---|---|---|
@@ -19,7 +18,7 @@ pasando. Próximo: CP5.
 | CP2 | Agente Claude (tool use) y ruteo de 4 caminos | **Hecho** |
 | CP3 | Endpoint FastAPI + parseo del webhook | **Hecho** |
 | CP4 | Orquestación n8n + prueba end-to-end | **Hecho** |
-| CP5 | Testing estructural completo | Pendiente |
+| CP5 | Testing estructural completo | **Hecho** |
 | CP6 | README de portfolio + cierre | Pendiente |
 
 Detalle de cada checkpoint (tareas, DoD, testing): ver `ROADMAP.md`.
@@ -170,9 +169,8 @@ detalle de qué pasa si se olvida está en "las tres sorpresas de CP4".
 
 ## Próximo paso
 
-Arrancar CP5: testing estructural de los bordes de SPECS §7 y §8, empezando por
-el hallazgo abierto del final de este documento, que ya se confirmó en
-producción. Ver `ROADMAP.md`.
+Arrancar CP6: README público de portfolio y checklist final contra los
+entregables de SPECS §13. Ver `ROADMAP.md`.
 
 ## Lo que salió de la verificación de CP3 y condicionó CP4
 
@@ -465,7 +463,7 @@ Que el paso 4 diga "registrada" ya es la prueba de que el token nuevo funciona:
 para registrar el callback, Meta le pega al webhook con ese token y espera el
 challenge de vuelta. Si el workflow tuviera el viejo, ese paso fallaría.
 
-## Hallazgo abierto — para CP5
+## El hallazgo de CP4, y cómo se cerró en CP5
 
 **En el camino de repregunta, el modelo afirma disponibilidad que no verificó.**
 Apareció en el caso 6 del guion de CP3, en las dos corridas:
@@ -478,9 +476,7 @@ además sugiere que ya quedó reservado. Si el horario estaba ocupado, el pacien
 contesta el servicio y el bot se contradice ofreciéndole alternativas.
 
 No es un fallo del endpoint —el ruteo y el `estado` son correctos— sino del
-texto que redacta el modelo. Se corrige en el prompt de sistema: al repreguntar,
-no afirmar disponibilidad ni dar por tomado el turno. Queda para CP5, que es
-donde viven los fixes que salen de los casos de borde.
+texto que redacta el modelo.
 
 **Confirmado en producción durante CP4.** Con un mensaje real por WhatsApp
 (`quiero un turno el jueves a las 11`) el bot contestó:
@@ -492,6 +488,138 @@ donde viven los fixes que salen de los casos de borde.
 la afirmación era cierta** —las 11 estaban libres— y aun así el modelo no tenía
 cómo saberlo. Que acierte por casualidad es lo que hace que el bug pase
 desapercibido hasta que el horario esté ocupado.
+
+### El problema no era el fix, era cómo verificarlo
+
+El fix se veía obvio desde CP4 —una regla en el prompt— y el problema real
+estaba en otro lado: **este es un bug de texto, y CODESTYLE prohíbe verificar si
+una respuesta "suena bien"**. Los 12 casos del guion miran qué tool se llamó y
+con qué argumentos; ninguno mira el texto.
+
+"Afirmar disponibilidad" es una propiedad semántica. Buscar frases prohibidas
+("tengo lugar", "está libre") no la verifica: es una lista escrita a mano que el
+modelo esquiva sin proponérselo, con un "¡Perfecto! ¿Qué servicio?" que afirma
+lo mismo sin usar ninguna de esas palabras. Un check así atrapa la frase que ya
+viste, no la propiedad — un test de regresión de un string disfrazado de
+garantía.
+
+La salida fue la que el proyecto ya venía usando en otros lados: **si el texto
+no puede variar, verificarlo es trivial.**
+
+### Qué se hizo
+
+**La repregunta dejó de ser texto libre y pasó a ser una tool.**
+`pedir_dato_faltante(datos: ["servicio" | "fecha" | "hora"])`, con el mismo enum
+cerrado que `consulta_general`. El camino 4 antes caía en `sin_tool` y devolvía
+lo que hubiera escrito el modelo; ahora devuelve `estado: dato_faltante` y el
+texto lo compone `respuestas.py`, como ya pasaba con la confirmación de turno y
+con las alternativas desde CP3.
+
+**La firma es el fix.** `_texto_dato_faltante(datos, config)` no recibe la fecha
+ni la hora que pidió el paciente. No puede afirmar que ese horario esté libre
+porque no lo conoce. Eso no es una regla que alguien tenga que respetar: es lo
+único que la función puede hacer.
+
+**El prompt igual lleva la regla**, en un bloque nuevo `QUÉ NO PODÉS SABER`: el
+modelo no ve la agenda, la disponibilidad se verifica recién al llamar a
+`crear_turno`, y no vale insinuarla con un "perfecto" ni un "dale" antes de
+repreguntar. La tool es la red de contención; esta regla ataca la causa.
+
+**La diferencia entre las dos mitades importa.** Con un fix de prompt solo, una
+desobediencia del modelo llega igual al paciente y recién se detecta si alguien
+corre el guion. Con la tool, si el modelo desobedece el caso falla ruidosamente
+(`tool: esperaba pedir_dato_faltante, vino ninguna`) **y** el paciente recibe la
+constante igual. El mal texto dejó de ser algo que se detecta después y pasó a
+ser algo que no sale.
+
+### Cómo quedó verificable
+
+| Nivel | Qué verifica |
+|---|---|
+| `test_agent_routing.py` | El resultado de una repregunta no transporta ningún slot: `fecha is None`, `alternativas == []`, `turno is None`. |
+| `test_respuestas.py` | Las **7** combinaciones no vacías de datos faltantes, exhaustivas: ninguna produce un solo dígito. |
+| `test_endpoint.py` | Sobre el body que sale a n8n: si el modelo escribe el texto de producción de CP4 *y además* llama a la tool, el paciente no lo ve. |
+| `verificar_agente.py`, caso 13 | Contra la API real, con el mensaje textual de producción. |
+
+El test de los dígitos es el que reemplaza a la lista de frases prohibidas.
+Una afirmación sobre un slot tiene que nombrar el slot, y un slot siempre lleva
+dígitos ("las 11", "el 20/8", "11:00"). Es exhaustivo justamente porque el texto
+ya no lo escribe el modelo: el espacio de salidas es finito y está en el repo.
+
+Como efecto secundario, los nombres de servicio en la repregunta van **sin
+precios**: repreguntar qué servicio necesita no es responder cuánto sale. Eso
+además es lo que deja el texto sin un solo dígito.
+
+### El escenario del guion ahora hace falsa la afirmación
+
+`TURNOS_TOMADOS` tiene ocupado el jueves 20 a las 11:00 — el slot exacto de la
+reproducción en producción. Con el slot tomado, un "tengo lugar" ahí es
+demostrablemente falso en vez de cierto por casualidad. Esa era la propiedad que
+faltaba para que el caso valga algo.
+
+## CP5 — cómo quedó cerrado
+
+Casi todo el checkpoint es de nivel agente: **no hizo falta levantar el stack**.
+Ni ngrok, ni n8n, ni Meta, ni tocar la Sheet real. `pytest` y
+`verificar_agente.py` alcanzaron.
+
+**La corrida real: 15/15.** El guion pasó de 12 a 15 casos y todos coincidieron
+con lo esperado en la primera corrida después del fix.
+
+| # | Caso | Verificado contra |
+|---|---|---|
+| 13 | Repregunta sobre slot ocupado | `pedir_dato_faltante {datos: ["servicio"]}`, y el texto enviado no nombra ni "jueves", ni "20", ni "11" |
+| 14 | Servicio fuera del catálogo | no llamó a `crear_turno` — la sustitución silenciosa es el riesgo real |
+| 15 | Urgencia | texto **idéntico** a `mensaje_urgencia(config)` |
+| 11, 12 | Repreguntas que ya existían | pasaron de `sin_tool` a `dato_faltante` sin romperse |
+
+Los casos 1 a 10 siguieron dando lo mismo que en CP2.
+
+**Las urgencias ahora tienen un texto fijo** (SPECS §7). El SPECS dice qué *no*
+hacer —no ofrecerlas como opción, no responder con información específica— pero
+no dice qué hacer, y sin una regla el modelo improvisa justo ahí. Es el peor
+lugar posible para improvisar: del otro lado hay alguien con dolor que necesita
+llegar a un humano. Se resolvió con el mismo patrón que la cancelación:
+`PLANTILLA_URGENCIA` en el código, teléfono del config, texto dictado por el
+prompt.
+
+Que sea una constante es lo que hace verificable el "no da información
+específica": **la plantilla no tiene una sola cifra**, así que no puede ofrecer
+un horario, un precio ni una fecha. La única cifra del mensaje final es el
+teléfono, que entra por el config. Contra la API real el modelo la reprodujo
+palabra por palabra, igual que había hecho con la de cancelación en CP4.
+
+### Dos cosas que aparecieron y no se tocaron
+
+**No hay historial de conversación, y el camino de repregunta lo necesita.**
+`decidir()` manda `messages=[{"role": "user", "content": mensaje}]` y no hay
+estado en ninguna parte del endpoint: cada mensaje es una llamada aislada. O
+sea que **la repregunta no puede completarse**: el paciente contesta "control" y
+el modelo arranca de cero, sin saber qué se le preguntó.
+
+Eso agranda el hallazgo en vez de achicarlo — la afirmación falsa era lo único
+que el paciente se llevaba de ese camino. Pero arreglarlo es una feature entera
+(persistir el hilo por teléfono, decidir cuándo expira), no un fix de borde, y
+CP5 es el checkpoint de los bordes. Queda anotado para el README de CP6 como
+limitación conocida, junto con la firma del webhook.
+
+**El camino `sin_tool` sigue siendo por donde sale prosa del modelo.** Ahora
+tiene tres usos, y solo dos están dictados:
+
+| Uso | Texto |
+|---|---|
+| Cancelación (SPECS §9) | dictado por el prompt, verificado contra la constante |
+| Urgencia (SPECS §7) | dictado por el prompt, verificado contra la constante |
+| Todo lo demás | libre |
+
+El caso 14 cae en el tercero: ante "quería hacerme un blanqueamiento" el modelo
+contestó de su cosecha que no lo hacen y listó el catálogo con precios. Los
+precios que dijo son los del config —están en el prompt—, pero los redactó él,
+no `respuesta_faq`. **Se deja así**: un servicio fuera del catálogo no es
+ninguno de los 4 caminos de SPECS §3, así que no tiene un texto especificado, y
+el riesgo que sí importaba —que sustituya el servicio y agende otra cosa— está
+cubierto y verificado. Vale tenerlo anotado por si en un cliente real hace falta
+cerrarlo.
 
 ## Documentos relacionados
 
