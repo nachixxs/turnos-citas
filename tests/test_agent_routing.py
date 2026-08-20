@@ -14,6 +14,7 @@ from typing import Any
 
 from app.agent import (
     DATOS_FALTANTES,
+    PLANTILLA_URGENCIA,
     TEMAS_FAQ,
     ArgumentosCrearTurno,
     DecisionAgente,
@@ -22,6 +23,7 @@ from app.agent import (
     definir_tools,
     extraer_decision,
     mensaje_cancelacion,
+    mensaje_urgencia,
     tool_crear_turno,
     tool_pedir_dato_faltante,
 )
@@ -86,6 +88,28 @@ def test_el_prompt_incluye_el_mensaje_fijo_de_cancelacion(config: ConfigNegocio)
     assert mensaje_cancelacion(config) in construir_prompt_sistema(
         config, PERFIL, ahora=AHORA
     )
+
+
+def test_el_prompt_incluye_el_mensaje_fijo_de_urgencia(config: ConfigNegocio) -> None:
+    assert mensaje_urgencia(config) in construir_prompt_sistema(
+        config, PERFIL, ahora=AHORA
+    )
+
+
+def test_el_mensaje_de_urgencia_usa_el_telefono_del_config(
+    config: ConfigNegocio,
+) -> None:
+    assert config.negocio.telefono_contacto in mensaje_urgencia(config)
+
+
+def test_el_mensaje_de_urgencia_no_da_informacion_especifica() -> None:
+    """SPECS §7: una urgencia no se responde con información específica.
+
+    La plantilla sin formatear no tiene una sola cifra: no puede ofrecer un
+    horario, un precio ni una fecha. La única cifra del mensaje final es el
+    teléfono de contacto, que entra por el config.
+    """
+    assert not any(c.isdigit() for c in PLANTILLA_URGENCIA)
 
 
 def test_el_prompt_le_prohibe_afirmar_disponibilidad(config: ConfigNegocio) -> None:

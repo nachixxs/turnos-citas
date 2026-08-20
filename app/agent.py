@@ -50,6 +50,26 @@ PLANTILLA_CANCELACION = (
 )
 
 
+# Mensaje fijo del camino de urgencia (SPECS §7). Las urgencias están fuera del
+# FAQ y fuera del alcance del MVP: no se ofrecen como opción ni se responden con
+# información específica. Que el texto sea una plantilla y no prosa del modelo es
+# lo que garantiza esa última parte — y es el peor lugar posible para improvisar,
+# porque del otro lado hay alguien con dolor que necesita llegar a un humano.
+PLANTILLA_URGENCIA = (
+    "Una urgencia no la puedo resolver por acá. Llamá directamente al "
+    "consultorio al {telefono} así te atienden lo antes posible."
+)
+
+
+def mensaje_urgencia(config: ConfigNegocio) -> str:
+    """El texto exacto con el que el bot deriva una urgencia (SPECS §7).
+
+    Mismo patrón que `mensaje_cancelacion`: el teléfono sale del JSON de
+    configuración y los tests comparan contra esta constante.
+    """
+    return PLANTILLA_URGENCIA.format(telefono=config.negocio.telefono_contacto)
+
+
 def mensaje_cancelacion(config: ConfigNegocio) -> str:
     """El texto exacto con el que el bot deriva una cancelación (SPECS §9).
 
@@ -118,6 +138,12 @@ QUÉ HACER CON CADA MENSAJE
 4. Si quiere un turno pero falta algún dato (no dijo qué servicio, o no dijo qué día, o no dijo a qué hora), llamá a la tool `pedir_dato_faltante` con la lista de los datos que falten. No escribas texto en ese caso: la pregunta la arma el sistema. Nunca inventes un servicio, una fecha ni un horario que el paciente no dijo.
 
 Si no dice para quién es el turno, es para quien escribe. Si dice que es para otra persona, usá el nombre de esa persona: eso no es un dato faltante y no hace falta repreguntarlo.
+
+5. Si el mensaje plantea una urgencia (dolor fuerte, un golpe, sangrado, algo que no puede esperar), NO llames a ninguna tool y NO ofrezcas turnos, horarios ni ninguna indicación de qué hacer. Respondé con este texto exacto, palabra por palabra, sin agregar ni sacar nada:
+
+{mensaje_urgencia(config)}
+
+Esta regla tiene prioridad sobre las demás: si el mensaje mezcla una urgencia con un pedido de turno, se responde la urgencia.
 
 QUÉ NO PODÉS SABER
 No ves la agenda. La disponibilidad de un horario la verifica el sistema, y solo cuando llamás a `crear_turno` con los cuatro datos completos. Hasta entonces no sabés si ese horario está libre.
