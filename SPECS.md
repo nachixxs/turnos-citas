@@ -104,6 +104,14 @@ El teléfono sale del JSON de configuración y no está hardcodeado en el códig
 - Cancelación / reprogramación self-service (respuesta fija, ver sección 9)
 - Número de WhatsApp verificado
 - Servidor de producción
+- **Verificación de la firma del webhook.** Meta firma cada payload con
+  `X-Hub-Signature-256` usando el app secret, y este MVP no la comprueba: el
+  endpoint procesa cualquier POST que llegue a la URL. Es una omisión
+  deliberada, no un olvido — el número es de prueba, la URL es un túnel que se
+  levanta a mano para demostrar, y no hay datos de terceros en juego. La
+  consecuencia sí conviene tenerla clara: cualquiera que conozca la URL puede
+  hacer que el bot envíe mensajes y escriba turnos en la Sheet. Entra en la lista
+  de la sección 11, junto con el servidor de producción.
 - Recordatorios automáticos antes del turno
 - Integración con calendario externo (Google Calendar)
 - Cobro de seña al confirmar
@@ -112,6 +120,8 @@ El teléfono sale del JSON de configuración y no está hardcodeado en el códig
 ## 11. Escalamiento — de MVP a proyecto completo
 
 Cuando esto se venda a un cliente real: recordatorios automáticos antes del turno, sincronización con Google Calendar, cobro de seña al confirmar, reprogramación self-service sin pasar por un humano, verificación de negocio de Meta y servidor de producción real.
+
+Lo primero de esa lista en volverse obligatorio es la verificación de la firma del webhook (sección 10): en cuanto la URL deje de ser un túnel efímero y haya turnos de pacientes reales en la planilla, un endpoint que procesa cualquier POST deja de ser una simplificación aceptable.
 
 ## 12. Stack técnico
 

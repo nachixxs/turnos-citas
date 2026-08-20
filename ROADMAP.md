@@ -202,6 +202,7 @@ guion de verificación del flujo · notas de troubleshooting si aparecen
 
 **Tareas:**
 - README público del repo, enfocado en la decisión técnica no obvia de SPECS §8 (grilla fija de 30 min vs. validación por solapamiento de intervalos) — por qué se descartó la alternativa, no solo qué hace el proyecto.
+- Sección de limitaciones conocidas, con la firma del webhook sin verificar (SPECS §10) explicada como decisión y no como olvido: qué implica, por qué se aceptó en un MVP con número de prueba, y qué la vuelve obligatoria en producción.
 - Confirmar que los datos de ejemplo del negocio ficticio están completos y consistentes con SPECS §4.
 - Checklist final contra los entregables de SPECS §13.
 
