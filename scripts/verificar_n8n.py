@@ -1,4 +1,4 @@
-"""Guion de verificación del flujo de n8n, sin Meta (CP4).
+"""Guion de verificación del flujo de n8n, sin Meta (CP4, ampliado en CP5).
 
 Corre el circuito completo —n8n → FastAPI → Claude API → Google Sheets → envío—
 reemplazando **solo** a Meta por un doble local. Todo lo demás es real.
@@ -67,8 +67,13 @@ sys.path.insert(0, str(RAIZ))
 # terminal ganan, que es como se corre contra el doble.
 load_dotenv(RAIZ / ".env", override=False)
 
-from app.config_loader import cargar_config  # noqa: E402
-from app.respuestas import MENSAJE_TIPO_NO_SOPORTADO, respuesta_faq  # noqa: E402
+from app.agent import DecisionAgente, ResultadoAgente  # noqa: E402
+from app.config_loader import ConfigNegocio, cargar_config  # noqa: E402
+from app.respuestas import (  # noqa: E402
+    MENSAJE_TIPO_NO_SOPORTADO,
+    componer_respuesta,
+    respuesta_faq,
+)
 
 OK = "[OK]"
 DIFF = "[DIFF]"
@@ -224,6 +229,21 @@ def fixture_con_texto(texto: str) -> dict:
     return crudo
 
 
+def texto_de_repregunta(dato: str, config: ConfigNegocio) -> str:
+    """El texto exacto que compone el código para una repregunta (CP5).
+
+    El paciente pidió un horario y no dijo el servicio. Que lo que sale por
+    WhatsApp sea **idéntico** a esta constante es lo que prueba, sobre el
+    circuito real, que el bot no afirma disponibilidad de un slot que nunca
+    verificó: el hallazgo abierto de CP4 (ver `ESTADO.md`).
+    """
+    return componer_respuesta(
+        ResultadoAgente(estado="dato_faltante", datos_faltantes=[dato]),
+        DecisionAgente(),
+        config,
+    )
+
+
 # ── Casos ─────────────────────────────────────────────────────────────────
 
 
@@ -375,6 +395,15 @@ def construir_casos(doble: DobleGraphAPI) -> list[tuple[str, Any, bool]]:
             ),
             True,
         ),
+        (
+            "Repregunta - el texto que sale no nombra el horario pedido",
+            lambda: caso_con_envio(
+                doble,
+                fixture_con_texto("hola, quiero sacar un turno para el jueves a las 11"),
+                texto_de_repregunta("servicio", config),
+            ),
+            True,
+        ),
     ]
 
 
@@ -387,7 +416,7 @@ def main() -> int:
     args = parser.parse_args()
 
     print("=" * 70)
-    print("Verificacion del flujo de n8n sin Meta - CP4")
+    print("Verificacion del flujo de n8n sin Meta - CP4 + CP5")
     print("=" * 70)
 
     try:
