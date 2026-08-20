@@ -8,9 +8,9 @@ MVP de agendamiento de turnos por WhatsApp con IA, primera de las 4 automatizaci
 
 ## Estado actual
 
-**Fase:** CP5 cerrado — los bordes de SPECS §7 y §8 están cubiertos y el
-hallazgo abierto de CP4 quedó corregido y verificado contra la API real. El
-guion del agente da 15/15 y hay 148 tests pasando. Próximo: CP6.
+**Fase:** **MVP terminado.** Los seis checkpoints están cerrados. 148 tests,
+`verificar_agente.py` 15/15, `verificar_n8n.py` 7/7, y los cuatro entregables de
+SPECS §13 verificados uno por uno.
 
 | CP | Nombre | Estado |
 |---|---|---|
@@ -19,7 +19,7 @@ guion del agente da 15/15 y hay 148 tests pasando. Próximo: CP6.
 | CP3 | Endpoint FastAPI + parseo del webhook | **Hecho** |
 | CP4 | Orquestación n8n + prueba end-to-end | **Hecho** |
 | CP5 | Testing estructural completo | **Hecho** |
-| CP6 | README de portfolio + cierre | Pendiente |
+| CP6 | README de portfolio + cierre | **Hecho** |
 
 Detalle de cada checkpoint (tareas, DoD, testing): ver `ROADMAP.md`.
 
@@ -169,8 +169,20 @@ detalle de qué pasa si se olvida está en "las tres sorpresas de CP4".
 
 ## Próximo paso
 
-Arrancar CP6: README público de portfolio y checklist final contra los
-entregables de SPECS §13. Ver `ROADMAP.md`.
+El MVP está cerrado; no queda trabajo de código pendiente. Lo que sigue está
+fuera del repo:
+
+- **La nota del proyecto en el vault.** `02-Projects/Turnos-Citas/` tiene solo
+  la carpeta `repo/`, sin `Overview.md` ni `Bugs-and-Lessons.md`. Dos cosas de
+  CP5 son lección genuina y no viven bien en un README de portfolio: por qué una
+  blocklist de frases no verifica una propiedad semántica, y el patrón general
+  de "si el texto no puede variar, verificarlo es trivial".
+- **Republicar El Parador** cuando se vuelva a ese proyecto:
+  `n8n publish:workflow --id=PtRTAyRQc8o19Zg7` y reiniciar n8n.
+
+Si el MVP se muestra a un lead o se vende a un cliente real, lo primero de la
+lista de SPECS §11 en volverse obligatorio es la verificación de la firma del
+webhook.
 
 ## Lo que salió de la verificación de CP3 y condicionó CP4
 
@@ -667,6 +679,34 @@ con token y `phone_id` de mentira. Eso se revirtió corriendo `configurar_n8n.py
 con el `.env` real, y está confirmado: `n8n/flow.local.json` ya no contiene
 `127.0.0.1:8099`. **Igual hace falta reiniciar n8n** para que el workflow
 repuesto tome efecto — publicar no basta.
+
+## CP6 — cómo quedó cerrado
+
+Checkpoint de redacción, sin código. El README quedó centrado en **dos**
+decisiones técnicas y no en una: además de la grilla fija de slots que pedía
+ROADMAP (SPECS §8), el hallazgo de CP5 al mismo nivel. La razón es que el
+hallazgo es el mejor material del repo para el rol al que apunta — un bug de LLM
+real, con una hipótesis de verificación descartada por escrito y un fix
+estructural — mientras que §8 es una decisión de producto.
+
+**Dos ítems del DoD se verificaron con código en vez de a ojo:**
+
+- La consistencia de los datos de ejemplo contra SPECS §4 se comprobó campo por
+  campo (nombre, dirección, teléfono, horarios, y los tres servicios con su
+  precio y duración), incluyendo que cada valor aparezca literalmente en el
+  SPECS. Todo consistente.
+- Las afirmaciones del README se chequearon contra el repo: que los archivos
+  citados existan, que las tools nombradas estén definidas, que el número de
+  tests sea el real y que el snippet de test citado coincida carácter por
+  carácter con el archivo. Sin diferencias.
+
+Lo segundo vale la pena como costumbre: un README de portfolio que dice "148
+tests" y tiene 130 es peor que no decir el número.
+
+**El documento de metodología no existe.** `ESTADO.md` referenciaba
+`metodologia-general-accelerate-ai.md`, sección "README público de cada repo",
+para el formato. Ese archivo no está en el vault. El formato se definió acá con
+lo que pedía ROADMAP CP6.
 
 ## Documentos relacionados
 
