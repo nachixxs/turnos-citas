@@ -88,6 +88,24 @@ def test_el_prompt_incluye_el_mensaje_fijo_de_cancelacion(config: ConfigNegocio)
     )
 
 
+def test_el_prompt_le_prohibe_afirmar_disponibilidad(config: ConfigNegocio) -> None:
+    """La regla que corrige el hallazgo abierto de CP4.
+
+    Es un test del prompt, no del comportamiento: verifica que la instrucción
+    esté, no que el modelo la obedezca. Lo segundo se mide contra la API real en
+    `scripts/verificar_agente.py`, y la red de contención de que igual no llegue
+    al paciente es que la repregunta ya no la redacta el modelo.
+    """
+    prompt = construir_prompt_sistema(config, PERFIL, ahora=AHORA)
+
+    assert "QUÉ NO PODÉS SABER" in prompt
+    assert "No ves la agenda" in prompt
+
+
+def test_el_prompt_manda_a_repreguntar_con_la_tool(config: ConfigNegocio) -> None:
+    assert "pedir_dato_faltante" in construir_prompt_sistema(config, PERFIL, ahora=AHORA)
+
+
 def test_el_mensaje_de_cancelacion_usa_el_telefono_del_config(
     config: ConfigNegocio,
 ) -> None:
