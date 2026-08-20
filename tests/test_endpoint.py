@@ -115,6 +115,12 @@ def bloque_consulta(tema: str = "precios") -> _Bloque:
     return _Bloque(type="tool_use", name="consulta_general", input={"tema": tema})
 
 
+def bloque_pedir_dato(*datos: str) -> _Bloque:
+    return _Bloque(
+        type="tool_use", name="pedir_dato_faltante", input={"datos": list(datos)}
+    )
+
+
 def bloque_texto(texto: str) -> _Bloque:
     return _Bloque(type="text", text=texto)
 
@@ -382,6 +388,65 @@ def test_una_cancelacion_devuelve_el_texto_del_modelo(
     assert cuerpo["estado"] == "sin_tool"
     assert cuerpo["respuesta"] == fijo
     assert sheets.guardados == []
+
+
+def test_una_repregunta_no_menciona_ningun_horario(
+    montar: Any, config: ConfigNegocio
+) -> None:
+    """El hallazgo abierto de CP4, verificado sobre el body que sale a n8n.
+
+    El paciente pidió un horario (`HORA_PEDIDA`) sin decir el servicio. Lo que
+    n8n manda por WhatsApp no puede nombrar ese horario: nadie leyó la Sheet
+    para saber si está libre. Con la repregunta compuesta en `respuestas.py` eso
+    no depende de cómo redacte el modelo — de hecho acá el modelo no redacta.
+    """
+    sheets = SheetsFalso()
+
+    cuerpo = (
+        montar(ClienteIAFalso(bloque_pedir_dato("servicio")), sheets)
+        .post("/webhook", json=payload("whatsapp_mensaje_texto"))
+        .json()
+    )
+
+    assert cuerpo["estado"] == "dato_faltante"
+    assert f"{HORA_PEDIDA:%H:%M}" not in cuerpo["respuesta"]
+    assert not any(c.isdigit() for c in cuerpo["respuesta"])
+    assert cuerpo["datos"]["turno"] is None
+    assert sheets.guardados == []
+
+
+def test_una_repregunta_le_pregunta_por_el_dato_que_falta(
+    montar: Any, config: ConfigNegocio
+) -> None:
+    cuerpo = (
+        montar(ClienteIAFalso(bloque_pedir_dato("servicio")), SheetsFalso())
+        .post("/webhook", json=payload("whatsapp_mensaje_texto"))
+        .json()
+    )
+
+    for servicio in config.servicios:
+        assert servicio.nombre in cuerpo["respuesta"]
+
+
+def test_una_repregunta_ignora_lo_que_el_modelo_haya_escrito(montar: Any) -> None:
+    """La red de contención del fix: aunque el modelo afirme disponibilidad, no sale.
+
+    Este es literalmente el texto que el bot mandó en producción durante CP4.
+    Ahora, si viene acompañado de la tool, el paciente no lo ve.
+    """
+    de_produccion = "¡Hola! Para el jueves 20 a las 11 tengo lugar 🙂 ¿Qué necesitás?"
+
+    cuerpo = (
+        montar(
+            ClienteIAFalso(bloque_texto(de_produccion), bloque_pedir_dato("servicio")),
+            SheetsFalso(),
+        )
+        .post("/webhook", json=payload("whatsapp_mensaje_texto"))
+        .json()
+    )
+
+    assert cuerpo["respuesta"] != de_produccion
+    assert "tengo lugar" not in cuerpo["respuesta"]
 
 
 def test_un_servicio_fuera_del_catalogo_no_guarda_nada(montar: Any) -> None:
