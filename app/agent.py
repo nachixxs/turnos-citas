@@ -115,7 +115,7 @@ QUÉ HACER CON CADA MENSAJE
 
 {mensaje_cancelacion(config)}
 
-4. Si quiere un turno pero falta algún dato (no dijo qué servicio, o no dijo fecha u hora), NO llames a ninguna tool: preguntá por el dato que falta y esperá la respuesta. Nunca inventes un servicio, una fecha ni un horario que el paciente no dijo.
+4. Si quiere un turno pero falta algún dato (no dijo qué servicio, o no dijo qué día, o no dijo a qué hora), llamá a la tool `pedir_dato_faltante` con la lista de los datos que falten. No escribas texto en ese caso: la pregunta la arma el sistema. Nunca inventes un servicio, una fecha ni un horario que el paciente no dijo.
 
 Si no dice para quién es el turno, es para quien escribe. Si dice que es para otra persona, usá el nombre de esa persona: eso no es un dato faltante y no hace falta repreguntarlo.
 
@@ -243,13 +243,74 @@ def tool_consulta_general(config: ConfigNegocio) -> dict:
     }
 
 
+# ── Tool: pedir_dato_faltante (camino 4, SPECS §3) ────────────────────────
+
+# Vocabulario cerrado de lo que puede faltar para reservar. Los otros dos datos
+# de `crear_turno` no entran acá: el teléfono llega del payload y el nombre del
+# paciente tiene default (SPECS §6), así que nunca "faltan".
+DatoFaltante = Literal["servicio", "fecha", "hora"]
+DATOS_FALTANTES: tuple[str, ...] = ("servicio", "fecha", "hora")
+
+
+class ArgumentosPedirDato(BaseModel):
+    """Qué datos le faltan al modelo para poder llamar a `crear_turno`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    datos: list[DatoFaltante] = Field(min_length=1)
+
+
+def tool_pedir_dato_faltante(config: ConfigNegocio) -> dict:
+    """Definición de la tool con la que el modelo repregunta un dato faltante.
+
+    **Por qué la repregunta es una tool y no texto libre.** Es el único camino
+    donde el modelo habla de un horario que el sistema todavía no verificó, y
+    ahí afirmaba disponibilidad que no tenía cómo saber (ver `ESTADO.md`,
+    "Hallazgo abierto"). Convertirlo en una tool mueve el texto a
+    `respuestas.py`, que compone la pregunta sin recibir la fecha ni la hora
+    pedidas: no puede afirmar disponibilidad ni por accidente.
+    """
+    del config  # qué datos puede faltar no depende del catálogo del negocio
+
+    return {
+        "name": "pedir_dato_faltante",
+        "description": (
+            "Llamala cuando el paciente quiere un turno pero no dijo todos los "
+            "datos que hacen falta para reservarlo. Pasá solo los que faltan. "
+            "No la uses si ya tenés servicio, fecha y hora: en ese caso llamá "
+            "a `crear_turno`."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "datos": {
+                    "type": "array",
+                    "items": {"type": "string", "enum": list(DATOS_FALTANTES)},
+                    "minItems": 1,
+                    "description": (
+                        "Los datos que el paciente todavía no dijo. Nunca "
+                        "incluyas uno que sí dijo."
+                    ),
+                },
+            },
+            "required": ["datos"],
+            "additionalProperties": False,
+        },
+        "strict": True,
+    }
+
+
 def definir_tools(config: ConfigNegocio) -> list[dict]:
     """Las dos tools del agente, en orden fijo.
 
     El orden importa para el caché de prompts de la API: una lista que cambia
     de orden entre requests invalida el prefijo cacheado.
     """
-    return [tool_crear_turno(config), tool_consulta_general(config)]
+    return [
+        tool_crear_turno(config),
+        tool_consulta_general(config),
+        tool_pedir_dato_faltante(config),
+    ]
 
 
 # ── Decisión: qué tool eligió el modelo ───────────────────────────────────
@@ -346,8 +407,9 @@ def decidir(
 # ── Ejecución: aplicar la decisión contra el motor de CP1 ─────────────────
 
 EstadoResultado = Literal[
-    "sin_tool",             # cancelación o repregunta: responde el texto del modelo
+    "sin_tool",             # cancelación o urgencia: responde el texto del modelo
     "consulta_general",     # FAQ, con el tema extraído
+    "dato_faltante",        # repregunta: falta algún dato para poder reservar
     "turno_confirmado",     # slot libre: queda un Turno listo para persistir
     "slot_no_disponible",   # ocupado o fuera de grilla: hay alternativas
     "servicio_invalido",    # el id no está en el catálogo del negocio
@@ -374,6 +436,10 @@ class ResultadoAgente(BaseModel):
     fecha: date | None = None
     alternativas: list[time] = Field(default_factory=list)
     tema: TemaFAQ | None = None
+    # Solo se puebla en `dato_faltante`. Deliberadamente NO viaja la fecha ni la
+    # hora que el paciente pidió: quien compone la repregunta no las recibe, y
+    # por eso no puede afirmar que ese horario esté libre.
+    datos_faltantes: list[DatoFaltante] = Field(default_factory=list)
     detalle: str = ""
 
 
@@ -398,6 +464,16 @@ def aplicar_decision(
         except ValidationError as error:
             return ResultadoAgente(estado="argumentos_invalidos", detalle=str(error))
         return ResultadoAgente(estado="consulta_general", tema=args_faq.tema)
+
+    if decision.tool == "pedir_dato_faltante":
+        try:
+            args_dato = ArgumentosPedirDato.model_validate(decision.argumentos)
+        except ValidationError as error:
+            return ResultadoAgente(estado="argumentos_invalidos", detalle=str(error))
+        # Se deduplica conservando el orden: el modelo puede repetir un dato y
+        # eso no es motivo para rechazar la repregunta.
+        unicos = list(dict.fromkeys(args_dato.datos))
+        return ResultadoAgente(estado="dato_faltante", datos_faltantes=unicos)
 
     if decision.tool != "crear_turno":
         return ResultadoAgente(

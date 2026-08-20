@@ -13,8 +13,15 @@ tests siguen siendo válidos sin tocarlos.
 from __future__ import annotations
 
 from datetime import date, time
+from itertools import combinations
 
-from app.agent import TEMAS_FAQ, DecisionAgente, ResultadoAgente, mensaje_cancelacion
+from app.agent import (
+    DATOS_FALTANTES,
+    TEMAS_FAQ,
+    DecisionAgente,
+    ResultadoAgente,
+    mensaje_cancelacion,
+)
 from app.availability import Turno
 from app.config_loader import ConfigNegocio
 from app.respuestas import (
@@ -188,23 +195,75 @@ def test_la_cancelacion_devuelve_el_texto_del_modelo_tal_cual(
     assert config.negocio.telefono_contacto in fijo
 
 
-def test_la_repregunta_devuelve_el_texto_del_modelo_tal_cual(
-    config: ConfigNegocio,
-) -> None:
-    pregunta = "¿Para qué servicio querés el turno?"
-    resultado = ResultadoAgente(estado="sin_tool")
-
-    assert (
-        componer_respuesta(resultado, DecisionAgente(texto=pregunta), config)
-        == pregunta
-    )
-
-
 def test_sin_tool_y_sin_texto_no_deja_al_paciente_sin_respuesta(
     config: ConfigNegocio,
 ) -> None:
     resultado = ResultadoAgente(estado="sin_tool")
     assert componer_respuesta(resultado, DecisionAgente(), config) == MENSAJE_NO_ENTENDIDO
+
+
+# ── dato_faltante: la repregunta, compuesta acá y no por el modelo ────────
+
+
+def _repregunta(config: ConfigNegocio, *datos: str) -> str:
+    resultado = ResultadoAgente(estado="dato_faltante", datos_faltantes=list(datos))
+    return componer_respuesta(resultado, DecisionAgente(), config)
+
+
+def test_la_repregunta_por_servicio_lista_el_catalogo_del_config(
+    config: ConfigNegocio,
+) -> None:
+    texto = _repregunta(config, "servicio")
+    for servicio in config.servicios:
+        assert servicio.nombre in texto
+
+
+def test_la_repregunta_por_fecha_y_hora_pregunta_las_dos_juntas(
+    config: ConfigNegocio,
+) -> None:
+    # Dos preguntas seguidas ("¿Qué día? ¿A qué hora?") leen peor en WhatsApp.
+    assert _repregunta(config, "fecha", "hora") == "¿Qué día y a qué hora te viene bien?"
+
+
+def test_cada_dato_faltante_tiene_su_propia_pregunta(config: ConfigNegocio) -> None:
+    textos = {d: _repregunta(config, d) for d in DATOS_FALTANTES}
+    assert len(set(textos.values())) == len(DATOS_FALTANTES)
+
+
+def test_ninguna_combinacion_de_datos_deja_al_paciente_sin_pregunta(
+    config: ConfigNegocio,
+) -> None:
+    # Las 7 combinaciones no vacías de los tres datos, exhaustivas.
+    for tamanio in (1, 2, 3):
+        for combinacion in combinations(DATOS_FALTANTES, tamanio):
+            texto = _repregunta(config, *combinacion)
+            assert texto != MENSAJE_NO_ENTENDIDO, combinacion
+            assert texto.endswith("?"), combinacion
+
+
+def test_la_repregunta_nunca_menciona_un_horario(config: ConfigNegocio) -> None:
+    """El test que cierra el hallazgo abierto de CP4.
+
+    Una afirmación sobre la disponibilidad de un slot tiene que nombrar el slot,
+    y un slot siempre lleva dígitos ("las 11", "el 20/8", "11:00"). Que ninguna
+    de las 7 combinaciones produzca un dígito es la prueba estructural de que
+    esta respuesta no puede afirmar disponibilidad — no una opinión sobre si el
+    texto "suena bien" (CODESTYLE, sección Testing).
+
+    Es verificable de forma exhaustiva justamente porque el texto ya no lo
+    escribe el modelo: el espacio de salidas es finito y está acá.
+    """
+    for tamanio in (1, 2, 3):
+        for combinacion in combinations(DATOS_FALTANTES, tamanio):
+            texto = _repregunta(config, *combinacion)
+            assert not any(c.isdigit() for c in texto), (combinacion, texto)
+
+
+def test_una_repregunta_sin_datos_no_deja_al_paciente_sin_respuesta(
+    config: ConfigNegocio,
+) -> None:
+    # Defensivo: el esquema de la tool ya exige al menos un dato.
+    assert _repregunta(config) == MENSAJE_NO_ENTENDIDO
 
 
 # ── Estados de error ──────────────────────────────────────────────────────

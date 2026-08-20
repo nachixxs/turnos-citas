@@ -13,6 +13,7 @@ from datetime import date, datetime, time
 from typing import Any
 
 from app.agent import (
+    DATOS_FALTANTES,
     TEMAS_FAQ,
     ArgumentosCrearTurno,
     DecisionAgente,
@@ -22,6 +23,7 @@ from app.agent import (
     extraer_decision,
     mensaje_cancelacion,
     tool_crear_turno,
+    tool_pedir_dato_faltante,
 )
 from app.config_loader import ConfigNegocio
 from tests.conftest import AHORA, MIERCOLES, turno
@@ -95,10 +97,11 @@ def test_el_mensaje_de_cancelacion_usa_el_telefono_del_config(
 # ── Definición de las tools ──────────────────────────────────────────────
 
 
-def test_el_agente_define_exactamente_dos_tools(config: ConfigNegocio) -> None:
+def test_el_agente_define_exactamente_tres_tools(config: ConfigNegocio) -> None:
     assert [t["name"] for t in definir_tools(config)] == [
         "crear_turno",
         "consulta_general",
+        "pedir_dato_faltante",
     ]
 
 
@@ -121,6 +124,17 @@ def test_crear_turno_no_le_pide_el_telefono_a_la_ia(config: ConfigNegocio) -> No
 def test_consulta_general_solo_cubre_los_temas_del_faq(config: ConfigNegocio) -> None:
     faq = definir_tools(config)[1]
     assert faq["input_schema"]["properties"]["tema"]["enum"] == list(TEMAS_FAQ)
+
+
+def test_pedir_dato_faltante_solo_admite_los_tres_datos(config: ConfigNegocio) -> None:
+    esquema = tool_pedir_dato_faltante(config)["input_schema"]
+    assert esquema["properties"]["datos"]["items"]["enum"] == list(DATOS_FALTANTES)
+
+
+def test_pedir_dato_faltante_exige_al_menos_un_dato(config: ConfigNegocio) -> None:
+    # Repreguntar sin decir qué falta no es una repregunta.
+    esquema = tool_pedir_dato_faltante(config)["input_schema"]
+    assert esquema["properties"]["datos"]["minItems"] == 1
 
 
 # ── Parseo de la respuesta ───────────────────────────────────────────────
@@ -278,13 +292,77 @@ def test_un_tema_fuera_del_faq_se_rechaza(config: ConfigNegocio) -> None:
     )
 
 
-# ── Caminos 3 y 4: cancelación y repregunta (ninguna tool) ───────────────
+# ── Camino 4: repregunta por dato faltante ───────────────────────────────
+
+
+def _decision_pedir_dato(*datos: str) -> DecisionAgente:
+    return DecisionAgente(tool="pedir_dato_faltante", argumentos={"datos": list(datos)})
+
+
+def test_la_repregunta_devuelve_que_dato_falta(config: ConfigNegocio) -> None:
+    resultado = aplicar_decision(
+        _decision_pedir_dato("servicio"), TELEFONO, [], config, ahora=AHORA
+    )
+
+    assert resultado.estado == "dato_faltante"
+    assert resultado.datos_faltantes == ["servicio"]
+    assert resultado.turno is None
+
+
+def test_la_repregunta_admite_varios_datos_faltantes(config: ConfigNegocio) -> None:
+    resultado = aplicar_decision(
+        _decision_pedir_dato("fecha", "hora"), TELEFONO, [], config, ahora=AHORA
+    )
+    assert resultado.datos_faltantes == ["fecha", "hora"]
+
+
+def test_la_repregunta_no_lleva_la_fecha_ni_la_hora_pedidas(
+    config: ConfigNegocio,
+) -> None:
+    """El invariante que cierra el hallazgo abierto de CP4.
+
+    El resultado de una repregunta no transporta ningún slot: ni la fecha, ni
+    alternativas, ni un turno. Quien compone el texto no recibe el horario que
+    pidió el paciente, así que no puede afirmar que esté libre.
+    """
+    resultado = aplicar_decision(
+        _decision_pedir_dato("servicio"), TELEFONO, [], config, ahora=AHORA
+    )
+
+    assert resultado.fecha is None
+    assert resultado.alternativas == []
+    assert resultado.turno is None
+
+
+def test_un_dato_faltante_repetido_se_deduplica(config: ConfigNegocio) -> None:
+    resultado = aplicar_decision(
+        _decision_pedir_dato("hora", "hora", "servicio"), TELEFONO, [], config, ahora=AHORA
+    )
+    assert resultado.datos_faltantes == ["hora", "servicio"]
+
+
+def test_un_dato_fuera_del_vocabulario_se_rechaza(config: ConfigNegocio) -> None:
+    # "obra_social" no es un dato que falte para reservar: es tema del FAQ.
+    resultado = aplicar_decision(
+        _decision_pedir_dato("obra_social"), TELEFONO, [], config, ahora=AHORA
+    )
+    assert resultado.estado == "argumentos_invalidos"
+
+
+def test_una_repregunta_sin_datos_se_rechaza(config: ConfigNegocio) -> None:
+    resultado = aplicar_decision(
+        _decision_pedir_dato(), TELEFONO, [], config, ahora=AHORA
+    )
+    assert resultado.estado == "argumentos_invalidos"
+
+
+# ── Camino 3: cancelación (ninguna tool) ─────────────────────────────────
 
 
 def test_sin_tool_no_toca_el_motor_de_turnos(config: ConfigNegocio) -> None:
-    # Cubre los dos caminos que no disparan tool: cancelación (SPECS §9) y
-    # repregunta por dato faltante.
-    decision = DecisionAgente(tool=None, texto="¿Para qué servicio sería?")
+    # Queda para cancelación (SPECS §9) y urgencias (SPECS §7): los caminos
+    # donde el prompt le dicta al modelo un texto fijo.
+    decision = DecisionAgente(tool=None, texto=mensaje_cancelacion(config))
     resultado = aplicar_decision(decision, TELEFONO, [], config, ahora=AHORA)
 
     assert resultado.estado == "sin_tool"

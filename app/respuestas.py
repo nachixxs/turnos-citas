@@ -10,8 +10,10 @@ Eso además es lo correcto para el dominio. Una confirmación de turno con fecha
 hora y servicio tiene que decir exactamente lo que quedó guardado en la Sheet;
 no es algo que convenga dejar a la redacción del modelo mensaje a mensaje.
 
-El único camino donde el texto sí sale del modelo es `sin_tool` — cancelación y
-repregunta (SPECS §3), donde no hay ningún dato que confirmar.
+El único camino donde el texto sí sale del modelo es `sin_tool` — cancelación
+(SPECS §9) y urgencias (SPECS §7), donde el prompt le dicta un texto fijo y no
+hay ningún dato que confirmar. La repregunta salió de ahí en CP5: la escribe
+`_texto_dato_faltante`, ver el porqué en su docstring.
 
 Todo dato del negocio entra por `ConfigNegocio`: los literales de acá son
 plantillas, nunca precios, horarios ni direcciones (CODESTYLE).
@@ -19,7 +21,7 @@ plantillas, nunca precios, horarios ni direcciones (CODESTYLE).
 
 from __future__ import annotations
 
-from app.agent import DecisionAgente, ResultadoAgente, TemaFAQ
+from app.agent import DatoFaltante, DecisionAgente, ResultadoAgente, TemaFAQ
 from app.config_loader import ConfigNegocio
 from app.formato import (
     fecha_en_palabras,
@@ -44,6 +46,18 @@ MENSAJE_ERROR_AL_GUARDAR = (
     "Perdón, no pude confirmar el turno por un problema del sistema. "
     "Probá de nuevo en un rato, así no te queda un turno a medias."
 )
+
+
+def _nombres_de_servicios(config: ConfigNegocio) -> str:
+    """'Control, Limpieza dental o Extracción' — sin precios.
+
+    Repreguntar qué servicio necesita no es responder cuánto sale: el precio es
+    tema del FAQ y meterlo acá alarga el mensaje sin que nadie lo haya pedido.
+    """
+    nombres = [s.nombre for s in config.servicios]
+    if len(nombres) == 1:
+        return nombres[0]
+    return f"{', '.join(nombres[:-1])} o {nombres[-1]}"
 
 
 def _catalogo_en_texto(config: ConfigNegocio) -> str:
@@ -110,6 +124,35 @@ def _texto_turno_confirmado(resultado: ResultadoAgente, config: ConfigNegocio) -
     )
 
 
+def _texto_dato_faltante(
+    datos: list[DatoFaltante], config: ConfigNegocio
+) -> str:
+    """La repregunta del camino 4, armada solo desde qué dato falta.
+
+    **Esta firma es el fix del hallazgo abierto.** No recibe la fecha ni la hora
+    que el paciente pidió, así que el texto que produce no puede afirmar que ese
+    horario esté libre: no lo conoce. Antes ese texto lo escribía el modelo, que
+    tampoco lo sabía pero igual lo afirmaba.
+    """
+    faltantes = set(datos)
+    partes: list[str] = []
+
+    if "servicio" in faltantes:
+        partes.append(f"¿Qué necesitás: {_nombres_de_servicios(config)}?")
+
+    if "fecha" in faltantes and "hora" in faltantes:
+        partes.append("¿Qué día y a qué hora te viene bien?")
+    elif "fecha" in faltantes:
+        partes.append("¿Qué día te viene bien?")
+    elif "hora" in faltantes:
+        partes.append("¿A qué hora te viene bien?")
+
+    if not partes:  # defensivo: el esquema de la tool exige al menos un dato
+        return MENSAJE_NO_ENTENDIDO
+
+    return " ".join(partes)
+
+
 def _texto_slot_no_disponible(resultado: ResultadoAgente) -> str:
     cuando = (
         f"el {fecha_en_palabras(resultado.fecha, con_anio=False)}"
@@ -138,7 +181,7 @@ def componer_respuesta(
     """El texto exacto que se le manda al paciente para este resultado.
 
     `decision` entra solo por el camino `sin_tool`, que es el único donde el
-    texto lo escribe el modelo (cancelación y repregunta, SPECS §3).
+    texto lo escribe el modelo (cancelación y urgencias).
     """
     estado = resultado.estado
 
@@ -149,6 +192,9 @@ def componer_respuesta(
         if resultado.tema is None:  # defensivo
             return MENSAJE_NO_ENTENDIDO
         return respuesta_faq(resultado.tema, config)
+
+    if estado == "dato_faltante":
+        return _texto_dato_faltante(resultado.datos_faltantes, config)
 
     if estado == "turno_confirmado":
         return _texto_turno_confirmado(resultado, config)
