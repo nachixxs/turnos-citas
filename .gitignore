@@ -44,3 +44,13 @@ desktop.ini
 
 # Notas operativas con datos de otros proyectos de la agencia
 NOTAS-LOCALES.md
+
+# ─────────────────────────────────────────────────────────────
+# Graphify + memoria local. Todo esto es setup de ESTA maquina:
+# rutas absolutas, grafo derivado (2.9 MB que se regenera en cada commit)
+# y configuracion personal. No le sirve a nadie que clone el repo.
+# ─────────────────────────────────────────────────────────────
+graphify-out/
+.gitattributes
+.claude/
+CLAUDE.local.md
