@@ -81,7 +81,7 @@ The n8n workflow is in `n8n/flow.template.json` and is imported with `scripts/co
 
 ## Tests
 
-`python -m pytest` runs **148 tests** that need no credentials or network. They assert concrete data (which tool was called, with which exact arguments, which slot came back), never whether a reply "sounds right".
+`python -m pytest` runs **148 tests** that need no credentials or network, and GitHub Actions runs them on every push. They assert concrete data (which tool was called, with which exact arguments, which slot came back), never whether a reply "sounds right".
 
 Separate verification scripts in `scripts/` run against real services and are run by hand:
 
