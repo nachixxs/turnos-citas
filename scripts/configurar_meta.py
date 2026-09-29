@@ -14,7 +14,7 @@ Uso:
 
     .venv\\Scripts\\python.exe scripts/configurar_meta.py
     .venv\\Scripts\\python.exe scripts/configurar_meta.py --solo-verificar
-    .venv\\Scripts\\python.exe scripts/configurar_meta.py --enviar 5492615550199
+    .venv\\Scripts\\python.exe scripts/configurar_meta.py --enviar 5492610000000
 
 Requiere el túnel de ngrok levantado (`ngrok http 5678`): la URL pública se lee
 sola de su API local, no hay que copiarla a mano.

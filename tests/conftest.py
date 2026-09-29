@@ -71,7 +71,7 @@ RUTA_FIXTURES = Path(__file__).parent / "fixtures"
 
 # Datos de quien escribe en los fixtures de Meta. Ficticios, como todo el resto
 # (CLAUDE.md del repo): no corresponden a ningún número real.
-TELEFONO_PACIENTE = "5492615550199"
+TELEFONO_PACIENTE = "5492610000000"
 PERFIL_PACIENTE = "Ignacio"
 
 

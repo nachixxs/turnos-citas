@@ -620,7 +620,7 @@ lugar de la Graph API. **7/7.** Lo que salió hacia el envío:
 
 ```
 7. Repregunta - el texto que sale no nombra el horario pedido
-   to   : 542615550199
+   to   : 542610000000
    texto: ¿Qué necesitás: Control, Limpieza dental o Extracción?
    [OK]
 ```

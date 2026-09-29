@@ -31,7 +31,7 @@ from app.respuestas import (
 )
 from tests.conftest import MIERCOLES, SABADO
 
-TELEFONO = "5492615550199"
+TELEFONO = "5492610000000"
 
 
 def _resultado_confirmado(servicio_id: str = "limpieza") -> ResultadoAgente:
