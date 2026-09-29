@@ -96,7 +96,7 @@ URL_DOBLE = f"http://127.0.0.1:{PUERTO_DOBLE}"
 
 # El `from` de los fixtures y cómo tiene que quedar después de que el workflow
 # le saque el "9" — el formato que Meta acepta para números argentinos.
-TELEFONO_FIXTURE = "5492615550199"
+TELEFONO_FIXTURE = "5492610000000"
 TELEFONO_ESPERADO = "542610000000"
 
 
